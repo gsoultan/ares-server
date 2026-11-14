@@ -4,8 +4,11 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 // The control-plane origin. In dev the proxy below forwards Connect calls to the
-// Go server, so the app can stay same-origin; override with VITE_ARES_URL.
-const ARES_ORIGIN = process.env.VITE_ARES_URL ?? "http://127.0.0.1:8080";
+// Go server, so the app can stay same-origin. ARES_PROXY_TARGET moves only the
+// proxy (scripts/dev.sh sets it); VITE_ARES_URL also makes the browser call the
+// server directly, which needs CORS, so it is for split deployments.
+const ARES_ORIGIN =
+  process.env.ARES_PROXY_TARGET ?? process.env.VITE_ARES_URL ?? "http://127.0.0.1:8080";
 
 export default defineConfig({
   root: ".",

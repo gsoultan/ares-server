@@ -26,6 +26,8 @@ service, and exactly what moved, is in [`docs/split-plan.md`](docs/split-plan.md
 
 ```
 cmd/ares-server        the server binary (control plane + worker pool)
+cmd/ares-devseed       seeds a local dev install with demo content
+cmd/ares-practice      deliberately weak, loopback-only practice target
 internal/auth          accounts, PBKDF2 passwords, roles, sessions
 internal/tenant        workspaces, the isolation boundary
 internal/secret        AES-256-GCM sealed secrets
@@ -43,7 +45,8 @@ internal/connectapi    gRPC (Connect) control plane
 internal/gen           generated protobuf / Connect code
 proto/                 the control-plane contract
 web/                   operator web UI (PWA)
-scripts/               dev, codegen and setup scripts
+scripts/               dev, codegen, setup and Postgres scripts
+samples/               synthetic demo inputs for the seeded dev run
 ```
 
 ## Develop
@@ -111,27 +114,79 @@ go run ./cmd/ares-server         # listens on :8080 (ARES_ADDR to change)
 
 ### Local development (the whole stack)
 
-Convenience scripts in `scripts/` boot the Go control plane and the web UI
-together:
+One command runs everything you need to work on Ares and to show it:
 
 ```sh
-scripts/setup.sh   # one-time: install the proto toolchain + web deps, then generate
-scripts/dev.sh     # run the control plane and the web UI together; Ctrl-C stops both
-scripts/gen.sh     # regenerate the gRPC/Connect bindings after editing the .proto
+scripts/setup.sh          # one-time: proto toolchain + web deps, then generate
+scripts/dev.sh            # run the seeded demo; Ctrl-C stops everything it started
 ```
 
-`scripts/dev.sh` serves the app at <http://127.0.0.1:5173> (the web dev server
-proxies control-plane calls to the backend on `:8080`). It reads a few optional
-environment variables:
+`scripts/dev.sh` builds and starts, together:
 
-| Variable    | Default    | Meaning                                              |
-| ----------- | ---------- | ---------------------------------------------------- |
-| `ARES_ADDR` | `:8080`    | control-plane listen address                         |
-| `ARES_DB`   | `memory`   | database path, or `memory` for an ephemeral dev run  |
-| `WEB_PORT`  | `5173`     | web dev-server port                                  |
+- the **control plane** on `:8080`,
+- the **web UI** at <http://127.0.0.1:5173> (its dev server proxies control-plane
+  calls to the backend, so the browser stays same-origin),
+- the **practice target** (`cmd/ares-practice`) at <http://127.0.0.1:8089>: a
+  small, deliberately weak site that listens on loopback only. Its weaknesses
+  are simulated (canned fake files, arithmetic-only "templates", a fixed fake
+  passwd line) so the checks have something safe to find,
+- on a Mac with Apple's [`container`](https://github.com/apple/container) CLI,
+  **PostgreSQL** in a container on its own port (see below).
 
-The dev runner defaults to an in-memory database so each run starts clean; set
-`ARES_DB=ares.db` to keep state between runs.
+It has two modes:
+
+| Command                  | What you get                                                          |
+| ------------------------ | --------------------------------------------------------------------- |
+| `scripts/dev.sh`         | **Seeded demo.** Skips the `/setup` wizard. Sign in as `admin@northwind.db` / `admin`. Workspace "Northwind Traders" (plus an empty "Contoso" one), engagement "Northwind practice lab" authorized for `127.0.0.1` only, and findings from safe checks against the practice target and from forensic jobs over `samples/`. Data persists in `.dev/`. |
+| `scripts/dev.sh --fresh` | The same, after wiping `.dev/` and reseeding.                         |
+| `scripts/dev.sh --setup` | **First run.** In-memory and empty, so the app opens on the `/setup` wizard. Nothing is kept. |
+
+Add `--no-pg` to either to skip the PostgreSQL container. Job results and finding
+statuses are held in memory by the server today, so the seeded demo re-runs its
+sample jobs on every start; accounts, workspaces and engagements persist.
+
+> **The demo credential is for local development only.** `admin` is shorter than
+> the 12-character policy; only the dev seeder (`cmd/ares-devseed`) can write it,
+> through `auth.HashPasswordForDevSeed`. The setup wizard, the API and the UI
+> still enforce the policy. Never point the seeder or `scripts/dev.sh` at a real
+> deployment.
+
+Optional environment variables:
+
+| Variable        | Default              | Meaning                                         |
+| --------------- | -------------------- | ----------------------------------------------- |
+| `ARES_ADDR`     | `:8080`              | control-plane listen address                    |
+| `WEB_PORT`      | `5173`               | web dev-server port                             |
+| `PRACTICE_ADDR` | `127.0.0.1:8089`     | practice target (must be a loopback address)    |
+| `DEV_DIR`       | `.dev`               | seeded database and master key                  |
+| `DEV_EMAIL`     | `admin@northwind.db` | demo super-admin email                          |
+| `DEV_PASSWORD`  | `admin`              | demo super-admin password                       |
+| `ARES_PG`       | `auto`               | `on`, `off`, or `auto` (on when `container` is installed) |
+| `ARES_PG_PORT`  | `55433`              | PostgreSQL host port                            |
+
+#### PostgreSQL in an Apple container
+
+`scripts/postgres.sh` runs PostgreSQL 17 in Apple's `container` runtime (macOS 26
+on Apple silicon), published on `127.0.0.1:55433` rather than the default 5432,
+in a container named `ares-dev-postgres` with its own volume, so it does not
+clash with other Postgres instances or containers on the machine.
+`scripts/dev.sh` starts it and leaves it running when you stop the stack.
+
+```sh
+scripts/postgres.sh up | down | status | psql | url | destroy
+```
+
+The dev script exports the container's URL as `ARES_PG_URL`, but it also sets
+`ARES_DB` to the seeded file store, and `ARES_DB` wins, so the demo runs on the
+embedded file store. To run the server on the storm-based Postgres datastore,
+set `ARES_DB` (or only `ARES_PG_URL`) to a `postgres://` URL.
+
+#### Sample files
+
+`samples/` holds the demo inputs: web-server and SSH logs, a threat-indicator
+list, a WordPress site backup with planted (inert) backdoors, a synthetic
+Android app, and the demo authorization letter. Upload them on the Forensics
+page to try those flows by hand. See `samples/README.md`.
 
 ### A walk-through
 
