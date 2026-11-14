@@ -142,7 +142,7 @@ export function PeoplePage() {
           />
         ) : (
           <Table.ScrollContainer minWidth={720}>
-            <Table verticalSpacing="sm" horizontalSpacing="lg">
+            <Table className="ares-stack" verticalSpacing="sm" horizontalSpacing="lg">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Person</Table.Th>
@@ -160,7 +160,7 @@ export function PeoplePage() {
                   const canSwitch = !self && (user.role === "superadmin" || (RANK[p.role] ?? 0) < mine);
                   return (
                     <Table.Tr key={p.id}>
-                      <Table.Td>
+                      <Table.Td data-primary>
                         <Group gap="xs">
                           <Text fw={600} c={p.disabled ? "dimmed" : undefined}>
                             {p.name || p.email}
@@ -171,7 +171,7 @@ export function PeoplePage() {
                           {p.email}
                         </Text>
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="Role">
                         {locked ? (
                           <Text>{roleName(p.role)}</Text>
                         ) : (
@@ -185,7 +185,7 @@ export function PeoplePage() {
                           />
                         )}
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="Sign-in">
                         <Group gap="sm" justify="space-between" wrap="nowrap">
                           <ToneBadge tone={p.disabled ? "neutral" : "good"}>
                             {p.disabled ? "Turned off" : "Can sign in"}

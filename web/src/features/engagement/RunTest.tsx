@@ -491,7 +491,7 @@ function TestResult({ job, engagementId }: { job: Job; engagementId: string }) {
           <Title order={3} mb="xs">
             Also discovered
           </Title>
-          <Table withTableBorder horizontalSpacing="md">
+          <Table className="ares-stack" withTableBorder horizontalSpacing="md">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Type</Table.Th>
@@ -502,9 +502,9 @@ function TestResult({ job, engagementId }: { job: Job; engagementId: string }) {
             <Table.Tbody>
               {assets.map((r, i) => (
                 <Table.Tr key={i}>
-                  <Table.Td style={{ textTransform: "capitalize" }}>{r.kind}</Table.Td>
-                  <Table.Td>{targetLabel(r.target)}</Table.Td>
-                  <Table.Td>
+                  <Table.Td data-label="Type" style={{ textTransform: "capitalize" }}>{r.kind}</Table.Td>
+                  <Table.Td data-label="Address">{targetLabel(r.target)}</Table.Td>
+                  <Table.Td data-label="Details">
                     <Text size="sm" c="dimmed" style={{ wordBreak: "break-word" }}>
                       {r.data ? describe(r.data) : ""}
                     </Text>

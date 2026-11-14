@@ -343,3 +343,68 @@ body {
     animation: none !important;
   }
 }
+
+/*
+ * Tables on phones. A table marked `ares-stack` turns each row into a card
+ * below the sm breakpoint (48em): the header hides, the primary cell
+ * (`data-primary`) leads at full width, and every other cell shows its column
+ * name from `data-label` beside its value. Cells marked `data-hide-mobile`
+ * (row chevrons) are dropped. Wide tables stop forcing a horizontal scroll.
+ */
+@media (max-width: 48em) {
+  .mantine-TableScrollContainer-scrollContainer:has(.ares-stack) .mantine-TableScrollContainer-scrollContainerInner,
+  .mantine-TableScrollContainer-scrollContainer:has(.ares-stack) .mantine-ScrollArea-viewport > div {
+    display: block !important;
+    min-width: 0 !important;
+    width: 100%;
+  }
+  .ares-stack,
+  .ares-stack > tbody {
+    display: block;
+    width: 100%;
+  }
+  .ares-stack > thead {
+    display: none;
+  }
+  .ares-stack > tbody > tr {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--ares-line);
+  }
+  .ares-stack > tbody > tr:last-child {
+    border-bottom: 0;
+  }
+  .ares-stack > tbody > tr > td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 !important;
+    border: 0 !important;
+    white-space: normal !important;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .ares-stack > tbody > tr > td[data-primary] {
+    order: -1;
+    display: block;
+  }
+  .ares-stack > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 45%;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mantine-color-dimmed);
+    padding-top: 2px;
+  }
+  .ares-stack > tbody > tr > td[data-label] > * {
+    min-width: 0;
+    text-align: right;
+  }
+  .ares-stack > tbody > tr > td[data-hide-mobile] {
+    display: none;
+  }
+}
