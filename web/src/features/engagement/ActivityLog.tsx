@@ -63,7 +63,7 @@ export function ActivityLog({
         <EmptyState title="Nothing has happened yet" />
       ) : (
         <Table.ScrollContainer minWidth={640}>
-          <Table>
+          <Table className="ares-stack">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>When</Table.Th>
@@ -78,14 +78,14 @@ export function ActivityLog({
                 const details = entryDetails(e, engagementId);
                 return (
                   <Table.Tr key={e.seq}>
-                    <Table.Td style={{ whiteSpace: "nowrap" }}>
+                    <Table.Td data-label="When" style={{ whiteSpace: "nowrap" }}>
                       <Text size="sm" c="dimmed">
                         {formatDateTime(e.time)}
                       </Text>
                     </Table.Td>
-                    <Table.Td style={{ whiteSpace: "nowrap" }}>{actorLabel(e.actor)}</Table.Td>
-                    <Table.Td>{actionLabel(e.action)}</Table.Td>
-                    <Table.Td>
+                    <Table.Td data-label="Who" style={{ whiteSpace: "nowrap" }}>{actorLabel(e.actor)}</Table.Td>
+                    <Table.Td data-label="What happened">{actionLabel(e.action)}</Table.Td>
+                    <Table.Td data-label="Details">
                       <Text size="sm" c="dimmed" style={{ wordBreak: "break-word" }}>
                         {details}
                       </Text>

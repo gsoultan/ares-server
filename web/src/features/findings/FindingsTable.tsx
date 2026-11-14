@@ -18,7 +18,7 @@ export function FindingsTable({
   const navigate = useNavigate();
   return (
     <Table.ScrollContainer minWidth={820}>
-      <Table highlightOnHover>
+      <Table className="ares-stack" highlightOnHover>
         <Table.Thead>
           <Table.Tr>
             <Table.Th w={116}>Severity</Table.Th>
@@ -42,10 +42,10 @@ export function FindingsTable({
                 })
               }
             >
-              <Table.Td>
+              <Table.Td data-label="Severity">
                 <SeverityBadge severity={f.finding.severity} />
               </Table.Td>
-              <Table.Td>
+              <Table.Td data-primary>
                 <Link
                   to="/engagements/$id"
                   params={{ id: f.engagementId }}
@@ -61,16 +61,16 @@ export function FindingsTable({
                   </Text>
                 )}
               </Table.Td>
-              {engagementNames && <Table.Td>{engagementNames[f.engagementId] ?? ""}</Table.Td>}
-              <Table.Td style={{ whiteSpace: "nowrap" }}>
+              {engagementNames && <Table.Td data-label="Engagement">{engagementNames[f.engagementId] ?? ""}</Table.Td>}
+              <Table.Td data-label="Status" style={{ whiteSpace: "nowrap" }}>
                 <StatusBadge info={findingStateInfo(findingState(f))} />
               </Table.Td>
-              <Table.Td style={{ whiteSpace: "nowrap" }}>
+              <Table.Td data-label="Found" style={{ whiteSpace: "nowrap" }}>
                 <Text size="sm" c="dimmed">
                   {formatWhen(f.foundAt)}
                 </Text>
               </Table.Td>
-              <Table.Td>
+              <Table.Td data-hide-mobile>
                 <Box c="dimmed" style={{ display: "flex" }}>
                   <IconChevronRight size={16} />
                 </Box>

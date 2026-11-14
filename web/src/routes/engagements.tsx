@@ -84,7 +84,7 @@ export function EngagementsPage() {
           <EmptyState title="No engagement matches" description="Try a different filter or search." />
         ) : (
           <Table.ScrollContainer minWidth={720}>
-            <Table>
+            <Table className="ares-stack">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Name</Table.Th>
@@ -104,7 +104,7 @@ export function EngagementsPage() {
                       className="ares-clickable"
                       onClick={() => void navigate({ to: "/engagements/$id", params: { id: e.id } })}
                     >
-                      <Table.Td>
+                      <Table.Td data-primary>
                         <Link
                           to="/engagements/$id"
                           params={{ id: e.id }}
@@ -119,26 +119,26 @@ export function EngagementsPage() {
                             : "Permission not recorded yet"}
                         </Text>
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="Status">
                         <StatusBadge info={engagementStatus(e.status)} />
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="Open findings">
                         <SeverityCounts
                           findings={findings.filter((f) => f.engagementId === e.id && isUnresolved(f))}
                           empty="None"
                         />
                       </Table.Td>
-                      <Table.Td style={{ whiteSpace: "nowrap" }}>
+                      <Table.Td data-label="Last test" style={{ whiteSpace: "nowrap" }}>
                         <Text size="sm" c="dimmed">
                           {last ? formatWhen(last.at) : "Not tested"}
                         </Text>
                       </Table.Td>
-                      <Table.Td style={{ whiteSpace: "nowrap" }}>
+                      <Table.Td data-label="Created" style={{ whiteSpace: "nowrap" }}>
                         <Text size="sm" c="dimmed">
                           {formatDate(e.createdAt)}
                         </Text>
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-hide-mobile>
                         <IconChevronRight size={16} color="var(--mantine-color-dimmed)" aria-hidden />
                       </Table.Td>
                     </Table.Tr>
