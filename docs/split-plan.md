@@ -1,6 +1,6 @@
 # Engine / server split: move plan
 
-Status: **proposal, phase 1** (nothing has been removed from `ares` yet).
+Status: **executed**, stacked on ares PR #7 (the move PRs are drafts until #7 merges).
 Basis: `gsoultan/ares` at PR #7's head (`claude/project-thread-5o2385`,
 `6ea4116`), which carries the storm-based Postgres datastore. `main` still has
 the older raw-pgx datastore, so the move must be made from PR #7's tree, never

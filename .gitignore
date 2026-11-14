@@ -1,4 +1,4 @@
-# Compiled binaries (anchored to the repo root so cmd/ares-api/ is not ignored)
+# Compiled binaries (anchored to the repo root so cmd/ares-server/ is not ignored)
 /bin/
 /ares-server
 /ares-worker

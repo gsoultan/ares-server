@@ -1,0 +1,345 @@
+@import "tailwindcss";
+
+/* Surfaces. Everything else comes from the Mantine theme in theme.ts. */
+:root {
+  --ares-canvas: #f5f7fa;
+  --ares-surface: #ffffff;
+  --ares-subtle: #f8fafc;
+  --ares-line: #e2e8f0;
+  --ares-page-width: 1040px;
+}
+
+:root[data-mantine-color-scheme="dark"] {
+  --ares-canvas: #0b101a;
+  --ares-surface: #111724;
+  --ares-subtle: #161d2b;
+  --ares-line: #262e40;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ares-canvas);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Form labels and helper text share one rhythm across every field. */
+.mantine-InputWrapper-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.mantine-InputWrapper-description {
+  margin-bottom: 6px;
+}
+
+/* Table headers are quiet captions, not a second row of body text. */
+.mantine-Table-th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+}
+
+/* A row or card the whole of which can be clicked. */
+.ares-clickable {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.ares-clickable:hover {
+  background: var(--ares-subtle);
+}
+.ares-clickable:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: -2px;
+}
+
+/* Tinted badges and coloured text must stay readable on a light surface, so
+   the text of each tone is a deep shade rather than the mid one. */
+:root[data-mantine-color-scheme="light"] {
+  --mantine-color-teal-light-color: #0a6c50;
+  --mantine-color-red-light-color: #b91c1c;
+  --mantine-color-orange-light-color: #b54708;
+  --mantine-color-yellow-light-color: #8a5a00;
+  --mantine-color-gray-light-color: #475569;
+  --mantine-color-brand-light-color: #4338ca;
+  --mantine-color-dimmed: #5b6779;
+}
+
+/* Router links, styled like the theme's anchors. */
+.ares-link {
+  color: var(--mantine-color-anchor);
+  text-decoration: none;
+  font-weight: 600;
+}
+.ares-link:hover {
+  text-decoration: underline;
+}
+.ares-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-dimmed);
+  text-decoration: none;
+}
+.ares-back:hover {
+  color: var(--mantine-color-text);
+}
+
+/* The live test view. Every movement stands for something that happened: a
+   request sent, a request blocked, a check finished, a finding found. */
+.ares-live-stages {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.ares-live-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 3px solid var(--ares-line);
+  color: var(--mantine-color-dimmed);
+  font-weight: 600;
+  transition: border-color 400ms;
+}
+.ares-live-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--ares-line);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  position: relative;
+}
+.ares-live-stage[data-state="active"] {
+  border-color: var(--mantine-primary-color-filled);
+  color: var(--mantine-color-text);
+}
+.ares-live-stage[data-state="active"] .ares-live-dot {
+  border-color: var(--mantine-primary-color-filled);
+  background: var(--mantine-color-brand-light);
+  color: var(--mantine-color-brand-light-color);
+}
+.ares-live-stage[data-state="active"] .ares-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid var(--mantine-primary-color-filled);
+  opacity: 0;
+  animation: ares-ring 1.6s ease-out infinite;
+}
+.ares-live-stage[data-state="done"] {
+  border-color: var(--mantine-color-teal-filled);
+  color: var(--mantine-color-text);
+}
+.ares-live-stage[data-state="done"] .ares-live-dot {
+  border-color: var(--mantine-color-teal-filled);
+  background: var(--mantine-color-teal-light);
+  color: var(--mantine-color-teal-light-color);
+}
+.ares-live-scene {
+  background: var(--ares-subtle);
+  border: 1px solid var(--ares-line);
+  border-radius: 10px;
+  padding: 16px;
+}
+.ares-live-lane {
+  display: grid;
+  grid-template-columns: minmax(0, 150px) 1fr minmax(0, 150px) 1fr minmax(0, 150px) minmax(24px, 0.5fr) minmax(0, 150px);
+  align-items: start;
+}
+.ares-live-actor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+  min-width: 0;
+}
+.ares-live-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--ares-surface);
+  border: 2px solid var(--ares-line);
+  display: grid;
+  place-items: center;
+  position: relative;
+  margin-bottom: 4px;
+  transition: border-color 300ms, box-shadow 300ms;
+}
+.ares-live-actor[data-state="busy"] .ares-live-avatar {
+  border-color: var(--mantine-primary-color-filled);
+  color: var(--mantine-primary-color-filled);
+  animation: ares-bob 1.2s ease-in-out infinite;
+}
+.ares-live-actor[data-state="ok"] .ares-live-avatar {
+  border-color: var(--mantine-color-teal-filled);
+}
+.ares-live-actor[data-state="hit"] .ares-live-avatar {
+  border-color: var(--mantine-color-red-filled);
+  box-shadow: 0 0 0 6px var(--mantine-color-red-light);
+  animation: ares-shake 400ms;
+}
+.ares-live-actor[data-state="deny"] .ares-live-avatar {
+  border-color: var(--mantine-color-red-filled);
+  animation: ares-shake 400ms;
+}
+.ares-live-says {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mantine-color-brand-light-color);
+  min-height: 36px;
+  margin-top: 4px;
+}
+.ares-live-actor[data-state="hit"] .ares-live-says,
+.ares-live-actor[data-state="deny"] .ares-live-says {
+  color: var(--mantine-color-red-light-color);
+}
+.ares-live-mark {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--mantine-color-red-filled);
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  animation: ares-pop 500ms ease;
+}
+.ares-live-wire {
+  height: 2px;
+  background: var(--ares-line);
+  position: relative;
+  margin-top: 32px;
+}
+.ares-live-wire[data-kind="watch"] {
+  background: none;
+  border-top: 2px dashed var(--ares-line);
+}
+.ares-live-wire i {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mantine-primary-color-filled);
+  opacity: 0;
+}
+.ares-live-wire[data-flow="true"] i {
+  animation: ares-travel 1.5s linear infinite;
+}
+.ares-live-wire[data-flow="true"] i:nth-child(2) {
+  animation-delay: 0.5s;
+}
+.ares-live-wire[data-flow="true"] i:nth-child(3) {
+  animation-delay: 1s;
+}
+.ares-live-wire i[data-stop] {
+  background: var(--mantine-color-red-filled);
+  animation: ares-stop 900ms ease-out forwards;
+}
+.ares-live-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid var(--ares-line);
+  animation: ares-enter 450ms ease both;
+}
+.ares-live-row:first-child {
+  border-top: 0;
+}
+.ares-live-row[data-running="true"] {
+  background: var(--mantine-color-brand-light);
+}
+@keyframes ares-ring {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+@keyframes ares-bob {
+  50% { transform: translateY(-3px); }
+}
+@keyframes ares-shake {
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes ares-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+@keyframes ares-travel {
+  0% { left: 0; opacity: 1; }
+  90% { opacity: 1; }
+  100% { left: calc(100% - 10px); opacity: 0; }
+}
+@keyframes ares-stop {
+  0% { left: 0; opacity: 1; }
+  70% { left: calc(100% - 10px); opacity: 1; transform: scale(1); }
+  100% { left: calc(100% - 10px); opacity: 0; transform: scale(2.2); }
+}
+@keyframes ares-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 720px) {
+  .ares-live-stages {
+    grid-auto-flow: row;
+  }
+  .ares-live-stage {
+    flex-direction: row;
+    align-items: center;
+    border-top: 0;
+    border-left: 3px solid var(--ares-line);
+    padding: 4px 0 4px 10px;
+  }
+  .ares-live-lane {
+    grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 12px minmax(0, 1fr) 8px minmax(0, 1fr);
+  }
+  .ares-live-role {
+    display: none;
+  }
+  .ares-live-avatar {
+    width: 48px;
+    height: 48px;
+  }
+  .ares-live-wire {
+    margin-top: 24px;
+  }
+}
+/* With animations turned off nothing travels, pulses or slides. The same
+   information changes in place. */
+@media (prefers-reduced-motion: reduce) {
+  .ares-live-wire i,
+  .ares-live-stage[data-state="active"] .ares-live-dot::after {
+    display: none;
+  }
+  .ares-live-avatar,
+  .ares-live-mark,
+  .ares-live-row {
+    animation: none !important;
+  }
+}

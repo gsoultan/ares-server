@@ -1,0 +1,668 @@
+syntax = "proto3";
+
+package ares.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/gsoultan/ares-server/internal/gen/ares/v1;aresv1";
+
+// ControlPlane is the Ares control-plane API. It is served over gRPC,
+// gRPC-Web and the Connect protocol by the same connect-go handler.
+service ControlPlane {
+  rpc ListModules(ListModulesRequest) returns (ListModulesResponse);
+  rpc CreateTenant(CreateTenantRequest) returns (Tenant);
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+  rpc CreateEngagement(CreateEngagementRequest) returns (Engagement);
+  rpc ListEngagements(ListEngagementsRequest) returns (ListEngagementsResponse);
+  rpc GetEngagement(GetEngagementRequest) returns (Engagement);
+  rpc SetScope(SetScopeRequest) returns (Engagement);
+  rpc Authorize(AuthorizeRequest) returns (Engagement);
+  rpc Halt(HaltRequest) returns (Engagement);
+  rpc DispatchJob(DispatchJobRequest) returns (DispatchJobResponse);
+  rpc GetJob(GetJobRequest) returns (JobOutcome);
+  // ListJobs lists an engagement's completed jobs, newest first, for the
+  // "earlier tests" view.
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+  // ListFindings lists an engagement's (or the whole workspace's) findings,
+  // deduplicated across re-runs.
+  rpc ListFindings(ListFindingsRequest) returns (ListFindingsResponse);
+  // SetFindingStatus records the operator's triage state for a finding.
+  rpc SetFindingStatus(SetFindingStatusRequest) returns (Finding);
+  rpc GetAudit(GetAuditRequest) returns (GetAuditResponse);
+  rpc GenerateReport(GenerateReportRequest) returns (GenerateReportResponse);
+  rpc GetDetectionSummary(GetDetectionSummaryRequest) returns (DetectionSummary);
+  rpc SetDetection(SetDetectionRequest) returns (DetectionSummary);
+  // GetRiskPicture correlates an engagement's findings into prioritized attack paths.
+  rpc GetRiskPicture(GetRiskPictureRequest) returns (RiskPicture);
+  rpc ListPurpleTemplates(ListPurpleTemplatesRequest) returns (ListPurpleTemplatesResponse);
+  rpc GetPurpleTemplate(GetPurpleTemplateRequest) returns (PurpleTemplate);
+  // Advise returns grounded AI advisory text for an engagement. It is strictly
+  // advisory: it never dispatches a job, changes scope, or bypasses the
+  // authorization gate. When no AI provider is configured the feature is simply
+  // off (enabled=false). Sending engagement data to the provider requires the
+  // operator's per-engagement opt-in.
+  rpc Advise(AdviseRequest) returns (AdviseResponse);
+
+  // Settings are configured in-app, per workspace: the AI advisory provider and
+  // the OSINT provider credentials. Secrets are write-only — GetSettings never
+  // returns a secret value, only whether it is set and a masked hint. Stored
+  // settings layer over environment-variable fallbacks.
+  rpc GetSettings(GetSettingsRequest) returns (SettingsView);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (SettingsView);
+
+  // TestAIProvider verifies that an AI provider configuration can authenticate
+  // and reach its model, with a minimal probe. It can test the saved settings or
+  // unsaved form values, and never stores anything. No engagement data is sent.
+  rpc TestAIProvider(TestAIProviderRequest) returns (TestAIProviderResponse);
+
+  // First-run setup. The app is gated to /setup until GetSetupStatus reports
+  // done. CommitSetup is the single atomic provisioning call; nothing is
+  // persisted before it, and it refuses to run on an initialized install.
+  rpc GetSetupStatus(GetSetupStatusRequest) returns (SetupStatus);
+  rpc TestDatabaseConnection(TestDatabaseConnectionRequest) returns (TestDatabaseConnectionResponse);
+  rpc CommitSetup(CommitSetupRequest) returns (CommitSetupResponse);
+
+  // Built-in email + password authentication. Login opens a server-side session
+  // and returns a bearer token; CurrentUser and Logout act on that token.
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  rpc CurrentUser(CurrentUserRequest) returns (UserInfo);
+
+  // User management (the People screen). Authorized by the caller's role:
+  // super-admins manage any workspace; owners/admins manage users within their
+  // own workspace, and cannot grant a role above their own.
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc CreateUser(CreateUserRequest) returns (UserInfo);
+  rpc SetUserRole(SetUserRoleRequest) returns (UserInfo);
+  rpc SetUserDisabled(SetUserDisabledRequest) returns (UserInfo);
+}
+
+// AdviseRequest asks the optional AI advisor to analyze engagement data.
+message AdviseRequest {
+  string tenant_id = 1;
+  string engagement_id = 2;
+  // feature: explain-finding | suggest-checks | narrate-paths | draft-report
+  string feature = 3;
+  // finding_id is required for the explain-finding feature.
+  string finding_id = 4;
+  // opt_in is the operator's per-engagement consent to send this engagement's
+  // data to the configured AI provider. No data leaves Ares unless it is true.
+  bool opt_in = 5;
+}
+
+// AdviseResponse carries the advisory narrative, or the reason none was produced.
+message AdviseResponse {
+  bool enabled = 1; // whether an AI provider is configured at all
+  bool opt_in_required = 2; // enabled, but opt_in was not given, so nothing was sent
+  string provider = 3; // the provider that answered (anthropic, openai, gemini, azure, …)
+  string model = 4;
+  string feature = 5;
+  string text = 6; // the advisory narrative (empty when disabled or opt-in missing)
+  string notice = 7; // the data-sharing notice to show the operator
+  int32 input_tokens = 8;
+  int32 output_tokens = 9;
+  string error = 10; // a provider/transport error, surfaced for the UI (no key)
+}
+
+// AISettings is the non-secret portion of the AI advisory configuration.
+message AISettings {
+  string provider = 1; // anthropic | openai | openai-compatible | gemini | azure
+  string model = 2;
+  string base_url = 3; // for openai-compatible / self-hosted and azure
+  string api_version = 4; // azure
+  int32 max_tokens = 5;
+  double temperature = 6;
+}
+
+// SecretStatus is the safe, read-only projection of a stored secret: whether it
+// is set and a masked hint. It never carries the secret value.
+message SecretStatus {
+  string name = 1; // stable identifier, e.g. ai.api_key, osint.shodan.api_key
+  bool set = 2;
+  string hint = 3; // masked (e.g. ••••1234), never the value
+  string updated_at = 4; // RFC3339
+}
+
+// SettingsView is the current effective configuration for a workspace: AI
+// (merged over env fallback) and the masked status of every known secret.
+message SettingsView {
+  string tenant_id = 1;
+  AISettings ai = 2;
+  repeated SecretStatus secrets = 3;
+  // ai_configured is true when the effective AI config (provider, model, key,
+  // endpoint) is complete enough to build a provider — i.e. the advisor would be
+  // on. Lets the UI show AI status without probing the Advise RPC.
+  bool ai_configured = 4;
+}
+
+message GetSettingsRequest {
+  string tenant_id = 1;
+}
+
+// SecretUpdate changes one secret. value is write-only (never returned). Set
+// value_present=true with a value to set it, value_present=true with an empty
+// value or clear=true to remove it, and value_present=false to leave unchanged.
+message SecretUpdate {
+  string name = 1;
+  string value = 2;
+  bool clear = 3;
+  bool value_present = 4;
+}
+
+message UpdateSettingsRequest {
+  string tenant_id = 1;
+  AISettings ai = 2; // applied only when ai_present is true
+  bool ai_present = 3;
+  repeated SecretUpdate secrets = 4;
+}
+
+// TestAIProviderRequest verifies an AI provider config. With ai_present it tests
+// the supplied (unsaved) form values instead of the saved settings; api_key is
+// used only for this test and is never stored.
+message TestAIProviderRequest {
+  string tenant_id = 1;
+  AISettings ai = 2;
+  bool ai_present = 3;
+  string api_key = 4; // write-only; used for the test only, never persisted
+  bool api_key_present = 5;
+}
+
+message TestAIProviderResponse {
+  bool ok = 1;
+  string provider = 2;
+  string model = 3;
+  int64 latency_ms = 4;
+  string error = 5; // key-free reason when ok is false
+}
+
+// DriverInfo describes a datastore driver and whether it can be committed now.
+message DriverInfo {
+  string name = 1;      // file | postgres
+  string label = 2;     // display label
+  bool available = 3;   // false => show disabled ("coming soon")
+  string note = 4;
+}
+
+message GetSetupStatusRequest {}
+
+// SetupStatus tells the app whether first-run setup is still required.
+message SetupStatus {
+  bool needed = 1;              // true => redirect the whole app to /setup
+  bool initialized = 2;
+  string initialized_at = 3;    // RFC3339
+  repeated DriverInfo drivers = 4; // which DB drivers the server can commit to
+  // db_path and key_file_path are the locations the running server is actually
+  // using (show them read-only; a different path typed in the wizard does not
+  // move them, because the server has already opened them).
+  string db_path = 5;
+  string key_file_path = 6;
+}
+
+// TestDatabaseConnectionRequest validates a datastore config without committing.
+// Postgres fields are accepted so the UI can collect them, but the Postgres
+// backend is not yet committable.
+message TestDatabaseConnectionRequest {
+  string driver = 1;   // file | postgres
+  string path = 2;     // file driver: datastore file path
+  string host = 3;     // postgres
+  int32 port = 4;
+  string database = 5;
+  string user = 6;
+  string password = 7;
+}
+
+message TestDatabaseConnectionResponse {
+  bool ok = 1;
+  string error = 2;      // readable, credential-free
+  string error_code = 3; // stable machine code (e.g. db_not_writable, driver_unavailable)
+}
+
+// SetupAdmin is the super-administrator to create (password min 12 chars).
+message SetupAdmin {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+// CommitSetupRequest is the single atomic setup submission.
+message CommitSetupRequest {
+  string driver = 1;
+  string path = 2;
+  string host = 3;   // postgres (not yet committable)
+  int32 port = 4;
+  string database = 5;
+  string user = 6;
+  string password = 7;
+  bool generate_key = 8;  // true => server generates the master key (returned once)
+  string key = 9;         // base64 32-byte key when generate_key is false
+  SetupAdmin admin = 10;
+  string tenant_name = 11;
+}
+
+message CommitSetupResponse {
+  bool ok = 1;
+  string generated_key = 2;  // base64 master key, shown exactly once (empty if supplied)
+  string initialized_at = 3; // RFC3339
+  string tenant_id = 4;
+  string admin_user_id = 5;
+  string error = 6;          // readable reason when ok is false
+  string error_code = 7;     // stable machine code (e.g. weak_password, already_initialized)
+}
+
+// UserInfo is the safe projection of an account (no password material).
+message UserInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string email = 3;
+  string name = 4;
+  string role = 5; // superadmin | owner | admin | member
+  bool disabled = 6; // true => account is turned off and cannot authenticate
+  string created_at = 7; // RFC3339
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  bool ok = 1;
+  string token = 2;       // bearer session token (store client-side)
+  string expires_at = 3;  // RFC3339
+  UserInfo user = 4;
+  string error = 5;       // generic on failure (reveals nothing about accounts)
+}
+
+message LogoutRequest {
+  string token = 1;
+}
+
+message LogoutResponse {
+  bool ok = 1;
+}
+
+message CurrentUserRequest {
+  string token = 1;
+}
+
+message ListUsersRequest {
+  string tenant_id = 1; // bound to the caller's workspace for non-super accounts
+}
+
+message ListUsersResponse {
+  repeated UserInfo users = 1;
+}
+
+message CreateUserRequest {
+  string tenant_id = 1; // bound to the caller's workspace for non-super accounts
+  string email = 2;
+  string name = 3;
+  string password = 4;  // min 12
+  string role = 5;      // owner | admin | member (superadmin only a super-admin may grant)
+}
+
+message SetUserRoleRequest {
+  string user_id = 1;
+  string role = 2;
+}
+
+message SetUserDisabledRequest {
+  string user_id = 1;
+  bool disabled = 2;
+}
+
+// Tenant is one client workspace: the isolation boundary that owns a set of
+// engagements. One workspace's engagements are never visible from another.
+message Tenant {
+  string id = 1;
+  string name = 2;
+  string created_at = 3; // RFC3339
+}
+
+// Target is one thing a module may act on.
+message Target {
+  string host = 1;
+  int32 port = 2;
+  string url = 3;
+}
+
+// Window bounds when testing is permitted.
+message Window {
+  string start = 1; // RFC3339; empty means unbounded
+  string end = 2; // RFC3339; empty means unbounded
+  repeated int32 days = 3; // allowed weekdays, 0=Sunday..6=Saturday; empty = any
+  int32 start_hour = 4; // allowed hour range start; set end_hour too
+  int32 end_hour = 5;
+  bool hours_set = 6;
+}
+
+message Authorization {
+  string document = 1;
+  string approved_by = 2;
+  string approved_at = 3; // RFC3339
+}
+
+message Engagement {
+  string id = 1;
+  string name = 2;
+  string status = 3; // draft | authorized | halted
+  Authorization authorization = 4;
+  string created_at = 5; // RFC3339
+  string tenant_id = 6; // the workspace that owns this engagement
+  repeated string in_scope = 7; // the saved scope's in-scope entries
+  repeated string exclude = 8; // the saved scope's exclusions
+}
+
+message ListModulesRequest {}
+message ListModulesResponse {
+  repeated string modules = 1;
+}
+
+message CreateTenantRequest {
+  string name = 1;
+}
+
+message ListTenantsRequest {}
+message ListTenantsResponse {
+  repeated Tenant tenants = 1;
+}
+
+// A tenant_id of "" on any request below means the default workspace.
+
+message CreateEngagementRequest {
+  string name = 1;
+  string tenant_id = 2;
+}
+
+message ListEngagementsRequest {
+  string tenant_id = 1;
+}
+message ListEngagementsResponse {
+  repeated Engagement engagements = 1;
+}
+
+message GetEngagementRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message SetScopeRequest {
+  string id = 1;
+  repeated string in_scope = 2;
+  repeated string exclude = 3;
+  Window window = 4;
+  string tenant_id = 5;
+}
+
+message AuthorizeRequest {
+  string id = 1;
+  string document = 2;
+  string approved_by = 3;
+  string tenant_id = 4;
+}
+
+message HaltRequest {
+  string id = 1;
+  string actor = 2;
+  string tenant_id = 3;
+}
+
+message Denial {
+  Target target = 1;
+  string reason = 2;
+}
+
+// Result is one observation a module emits. data holds the capability-specific
+// payload (findings carry severity, title, evidence and so on).
+message Result {
+  string capability = 1;
+  string kind = 2;
+  Target target = 3;
+  string technique = 4;
+  google.protobuf.Struct data = 5;
+}
+
+message DispatchJobRequest {
+  string engagement_id = 1;
+  string module = 2;
+  string actor = 3;
+  repeated Target targets = 4;
+  google.protobuf.Struct params = 5; // module-specific configuration
+  string tenant_id = 6;
+}
+message DispatchJobResponse {
+  string job_id = 1;
+  string status = 2;
+}
+
+message GetJobRequest {
+  string job_id = 1;
+  string tenant_id = 2;
+}
+message JobOutcome {
+  string status = 1; // pending | running | done
+  string job_id = 2;
+  string engagement = 3;
+  string module = 4;
+  repeated Target allowed = 5;
+  repeated Denial denied = 6;
+  repeated Result results = 7;
+  string error = 8;
+  // current_capability names the capability whose result arrived most recently
+  // while status is "running"; empty once done. Lets a live view show motion.
+  string current_capability = 9;
+}
+
+message ListJobsRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+}
+// JobSummary is one completed job without its results — enough to list the
+// "earlier tests" and reopen one with GetJob.
+message JobSummary {
+  string job_id = 1;
+  string module = 2;
+  string status = 3; // running | done | error
+  string started_at = 4; // RFC3339
+  string finished_at = 5; // RFC3339
+  int32 allowed = 6; // targets the gate permitted
+  int32 denied = 7; // targets the gate refused
+  int32 findings = 8; // findings the job raised
+  string error = 9;
+}
+message ListJobsResponse {
+  repeated JobSummary jobs = 1; // newest first
+}
+
+// Finding is one raised observation, deduplicated across re-runs of the same
+// check and carrying its operator-set triage status.
+message Finding {
+  string id = 1; // stable across re-runs (engagement+module+technique+title+target)
+  string engagement_id = 2;
+  string engagement_name = 3;
+  string job_id = 4; // the most recent job it was seen in
+  string module = 5;
+  string kind = 6; // finding | info
+  string target = 7;
+  string technique = 8;
+  google.protobuf.Struct data = 9; // the full Result.data payload, incl. remediationDetail
+  string found_at = 10; // RFC3339, when first seen
+  string last_seen = 11; // RFC3339, most recent run it appeared in
+  bool still_present = 12; // false once a later run of the same module+target did not re-raise it
+  string status = 13; // open | in_progress | fixed
+}
+message ListFindingsRequest {
+  string tenant_id = 1;
+  string engagement_id = 2; // empty = the whole workspace
+}
+message ListFindingsResponse {
+  repeated Finding findings = 1;
+}
+message SetFindingStatusRequest {
+  string tenant_id = 1;
+  string id = 2;
+  string status = 3; // open | in_progress | fixed
+  string actor = 4;
+}
+
+message AuditEntry {
+  int32 seq = 1;
+  string time = 2; // RFC3339
+  string actor = 3;
+  string action = 4;
+  string target = 5;
+  string detail = 6;
+  string prev_hash = 7;
+  string hash = 8;
+}
+message GetAuditRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message GenerateReportRequest {
+  string id = 1;
+  string tenant_id = 2;
+  string format = 3; // pdf | docx | md (default pdf)
+}
+message GenerateReportResponse {
+  string filename = 1;
+  string content_type = 2;
+  bytes data = 3;
+}
+message GetAuditResponse {
+  repeated AuditEntry entries = 1;
+  bool valid = 2;
+}
+
+// The blue/purple seam: for each ATT&CK technique the test exercised, the
+// defender outcome the operator recorded, scored into a coverage figure.
+
+// TechniqueStatus is one exercised technique and its recorded defender outcome.
+message TechniqueStatus {
+  string technique = 1;
+  int32 findings = 2; // how many findings used this technique
+  string outcome = 3; // unknown | prevented | detected | logged | missed
+  string note = 4;
+}
+
+message DetectionSummary {
+  repeated TechniqueStatus techniques = 1;
+  int32 total = 2; // techniques exercised
+  int32 covered = 3; // prevented + detected
+  int32 coverage_percent = 4;
+  map<string, int32> counts = 5; // outcome -> count
+}
+
+message GetDetectionSummaryRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+// PathStep is one link in a correlated attack path.
+message PathStep {
+  string title = 1;
+  string technique = 2;
+  string role = 3; // foothold | enabler | impact
+}
+
+// AttackPath is a correlated chain of findings toward a real-world outcome.
+message AttackPath {
+  string name = 1;
+  string outcome = 2;
+  string severity = 3;
+  int32 priority = 4; // 0-100
+  repeated PathStep steps = 5;
+  string why = 6;
+}
+
+// RiskPicture is the correlated, prioritized view of an engagement's findings.
+message RiskPicture {
+  string target = 1;
+  int32 score = 2; // 0-100
+  string rating = 3; // critical | high | medium | low | none
+  repeated AttackPath paths = 4;
+  repeated string unchained = 5;
+}
+
+message GetRiskPictureRequest {
+  string id = 1;
+  string tenant_id = 2;
+}
+
+message SetDetectionRequest {
+  string id = 1;
+  string tenant_id = 2;
+  string technique = 3;
+  string outcome = 4; // unknown | prevented | detected | logged | missed
+  string note = 5;
+  string actor = 6;
+}
+
+// Purple-team exercises: real breaches and attack chains as ATT&CK-mapped
+// reference data, scored against an engagement's recorded detection outcomes.
+// Nothing here runs anything; a destructive step is described with the safe,
+// observational way Ares exercises it instead.
+
+// PurpleCoverage is the headline detection score for a template: how many of
+// its techniques the defenders prevented or detected.
+message PurpleCoverage {
+  int32 total = 1; // techniques the template exercises
+  int32 covered = 2; // prevented + detected
+  int32 coverage_percent = 3;
+  map<string, int32> counts = 4; // outcome -> count
+}
+
+// PurpleStep is one breach step, mapped to ATT&CK, annotated with the defender
+// outcome recorded for its technique in the engagement.
+message PurpleStep {
+  int32 order = 1;
+  string tactic = 2;
+  string technique = 3;
+  string technique_name = 4;
+  string title = 5;
+  string description = 6;
+  string detection_expectation = 7;
+  string safe_emulation = 8;
+  string outcome = 9; // unknown | prevented | detected | logged | missed
+  string note = 10;
+  string defense = 11; // how blue prevents/hardens against this step
+}
+
+// PurpleTemplateSummary lists a template's identity and headline stats without
+// its steps. coverage is set only when scored against an engagement.
+message PurpleTemplateSummary {
+  string id = 1;
+  string name = 2;
+  string summary = 3;
+  string reference = 4;
+  int32 step_count = 5;
+  int32 techniques = 6;
+  PurpleCoverage coverage = 7;
+}
+
+// PurpleTemplate is one exercise fully scored against an engagement.
+message PurpleTemplate {
+  string id = 1;
+  string name = 2;
+  string summary = 3;
+  string reference = 4;
+  repeated PurpleStep steps = 5;
+  PurpleCoverage coverage = 6;
+}
+
+// A tenant_id of "" means the default workspace. An empty engagement_id returns
+// the catalog unscored; a set one scores every template against that engagement.
+message ListPurpleTemplatesRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+}
+message ListPurpleTemplatesResponse {
+  repeated PurpleTemplateSummary templates = 1;
+}
+
+message GetPurpleTemplateRequest {
+  string engagement_id = 1;
+  string template_id = 2;
+  string tenant_id = 3;
+}
