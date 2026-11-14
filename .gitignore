@@ -1,0 +1,17 @@
+# Compiled binaries (anchored to the repo root so cmd/ares-api/ is not ignored)
+/bin/
+/ares-server
+/ares-worker
+*.exe
+
+# Test and coverage output
+*.out
+coverage.*
+
+# Local env
+.env
+*.local
+
+# Embedded database (default path)
+/ares.db
+*.db
