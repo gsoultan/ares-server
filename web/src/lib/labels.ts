@@ -1,0 +1,368 @@
+// Plain-language names for everything the control plane reports in its own
+// vocabulary. The UI never shows a raw status, module id or audit action; it
+// looks the wording up here, so the whole app speaks with one voice.
+
+export type Tone = "neutral" | "good" | "warn" | "bad" | "brand";
+
+// Mantine colour for each tone. The only place tones become colours.
+export function toneColor(t: Tone): string {
+  switch (t) {
+    case "good":
+      return "teal";
+    case "warn":
+      return "orange";
+    case "bad":
+      return "red";
+    case "brand":
+      return "brand";
+    default:
+      return "gray";
+  }
+}
+
+export interface StatusInfo {
+  label: string;
+  tone: Tone;
+  hint: string;
+}
+
+export function engagementStatus(status: string): StatusInfo {
+  switch (status) {
+    case "authorized":
+      return { label: "Ready to test", tone: "good", hint: "Permission is on file. Tests can run." };
+    case "halted":
+      return { label: "Stopped", tone: "bad", hint: "Testing was stopped. Nothing more can run." };
+    case "draft":
+      return { label: "Setting up", tone: "neutral", hint: "Needs a scope and signed permission before any test can run." };
+    default:
+      return { label: status, tone: "neutral", hint: "" };
+  }
+}
+
+export interface ModuleInfo {
+  label: string;
+  summary: string;
+  // What the address box should ask for, or null when the test takes no addresses.
+  targets: "url" | "hostport" | null;
+  // A forensics tool: it works on files you add, from the Forensics page.
+  forensic?: boolean;
+}
+
+const MODULES: Record<string, ModuleInfo> = {
+  recon: {
+    label: "Profile the target",
+    summary: "Start here. Works out what the site is built with and recommends which tests to run. Changes nothing.",
+    targets: "url",
+  },
+  webcheck: {
+    label: "Website weakness check",
+    summary: "Looks for common website mistakes, such as exposed files and missing protections. Read-only.",
+    targets: "url",
+  },
+  httpprobe: {
+    label: "Website health check",
+    summary: "Checks that a website responds and reviews its safety settings. Read-only.",
+    targets: "url",
+  },
+  tlscheck: {
+    label: "Encryption (HTTPS) check",
+    summary: "Checks the certificate and encryption settings: expiry, mismatches, weak keys and outdated versions. Sends no data.",
+    targets: "hostport",
+  },
+  portscan: {
+    label: "Open port check",
+    summary: "Finds which network doors are open on a server.",
+    targets: "hostport",
+  },
+  versionscan: {
+    label: "Known-vulnerable product check",
+    summary: "Spots internet-facing products attackers commonly target and names the weakness to check. Read-only.",
+    targets: "url",
+  },
+  reflectprobe: {
+    label: "Input handling check",
+    summary: "Places a harmless marker in page inputs and reports where it is echoed back. Sends no attack payloads.",
+    targets: "url",
+  },
+  ssrfprobe: {
+    label: "Server request forgery test",
+    summary: "Confirms whether the server can be tricked into calling an address we control. Uses a harmless Ares address.",
+    targets: "url",
+  },
+  sstiprobe: {
+    label: "Template handling test",
+    summary: "Checks whether the server runs text from page inputs as a template. Uses a harmless sum, nothing else.",
+    targets: "url",
+  },
+  traversalprobe: {
+    label: "File path test",
+    summary: "Checks whether page inputs can reach files outside the website's own folder. Records proof only, not file contents.",
+    targets: "url",
+  },
+  redirectprobe: {
+    label: "Redirect test",
+    summary: "Checks whether a link on the site can be made to send visitors to another site. Nothing is followed.",
+    targets: "url",
+  },
+  headerprobe: {
+    label: "Request header test",
+    summary: "Checks whether the site trusts the address details a visitor's browser sends, which can poison links and caches.",
+    targets: "url",
+  },
+  ctlogs: {
+    label: "Subdomain lookup",
+    summary: "Finds the domain's subdomains in public certificate records. Never touches the target.",
+    targets: "hostport",
+  },
+  dnsrecon: {
+    label: "DNS and email check",
+    summary: "Reads the domain's public DNS records and checks whether its email can be faked. Never touches the target.",
+    targets: "hostport",
+  },
+  rdap: {
+    label: "Domain registration check",
+    summary: "Reads the domain's public registration record and flags a near expiry or a missing transfer lock.",
+    targets: "hostport",
+  },
+  log4shellprobe: {
+    label: "Log4Shell test",
+    summary: "Confirms the Log4j weakness by placing a harmless marker and watching for the server to look it up.",
+    targets: "url",
+  },
+  accesscheck: {
+    label: "Account access test",
+    summary: "Checks whether one signed-in user can open things that belong to another user. Read-only.",
+    targets: null,
+  },
+  bolaprobe: {
+    label: "Record access test",
+    summary: "Signs in as one account and tries to read test records it does not own. Read-only and limited to the records you list.",
+    targets: "url",
+  },
+  apkscan: {
+    label: "Android app review",
+    summary: "Reviews an uploaded Android app for risky settings, built-in secrets and weak encryption. Touches no server.",
+    targets: null,
+  },
+  evidence: {
+    label: "Record evidence",
+    summary: "Fingerprints each file and writes it to the activity log, so its chain of custody can be proven.",
+    targets: null,
+    forensic: true,
+  },
+  filemeta: {
+    label: "File tampering check",
+    summary: "Works out what each file really is, and flags disguised or booby-trapped files.",
+    targets: null,
+    forensic: true,
+  },
+  logscan: {
+    label: "Log review",
+    summary: "Reads a log for signs of attack and puts them in order as a timeline.",
+    targets: null,
+    forensic: true,
+  },
+  iocmatch: {
+    label: "Known-threat match",
+    summary: "Compares hashes, addresses and domains with a list of known bad ones.",
+    targets: null,
+    forensic: true,
+  },
+  triage: {
+    label: "Evidence intake",
+    summary: "Records files and bundles as evidence, opens bundles safely, and checks every file inside by its real type.",
+    targets: null,
+    forensic: true,
+  },
+  wpscan: {
+    label: "WordPress check",
+    summary: "Looks through a WordPress backup for back doors, hidden code and changed core files.",
+    targets: null,
+    forensic: true,
+  },
+  apkbackend: {
+    label: "App server check",
+    summary: "Works out which servers an Android app talks to and tests the ones inside the scope.",
+    targets: null,
+    forensic: true,
+  },
+  noop: {
+    label: "Permission check only",
+    summary: "Runs nothing. Only confirms which addresses the scope allows.",
+    targets: "url",
+  },
+};
+
+export function moduleInfo(id: string): ModuleInfo {
+  return MODULES[id] ?? { label: id, summary: "", targets: "url" };
+}
+
+const ACTIONS: Record<string, string> = {
+  "engagement-created": "Engagement created",
+  "scope-updated": "Scope saved",
+  "authorization-approved": "Permission recorded",
+  "engagement-halted": "Testing stopped",
+  "job-started": "Test started",
+  "job-finished": "Test finished",
+  "job-error": "Test failed",
+  "job-refused": "Test refused",
+  "scope-denied": "Address skipped (out of scope)",
+  "detection-recorded": "Defender result recorded",
+  "finding-status": "Finding status changed",
+  "evidence-ingested": "Evidence recorded",
+  result: "Result recorded",
+};
+
+export function actionLabel(action: string): string {
+  return ACTIONS[action] ?? action;
+}
+
+const ACTORS: Record<string, string> = {
+  system: "Ares",
+  grpc: "Ares",
+  api: "Ares",
+  worker: "Ares",
+  operator: "You",
+};
+
+export function actorLabel(actor: string): string {
+  return ACTORS[actor] ?? actor;
+}
+
+const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "medium",
+});
+
+export function formatDate(rfc3339: string): string {
+  const d = new Date(rfc3339);
+  return Number.isNaN(d.getTime()) ? "" : dateFmt.format(d);
+}
+
+export function formatDateTime(rfc3339: string): string {
+  const d = new Date(rfc3339);
+  return Number.isNaN(d.getTime()) ? rfc3339 : dateTimeFmt.format(d);
+}
+
+// Plain wording for a failed call. The raw error stays out of the page.
+export function errorText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  return raw.replace(/^\[[a-z_]+\]\s*/i, "");
+}
+
+export function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+// The saved scope, reworded from the activity log's own summary.
+export function scopeText(detail: string): string {
+  const m = detail.match(/^(\d+) in scope, (\d+) excluded$/);
+  if (!m) return detail;
+  const allowed = plural(Number(m[1]), "entry allowed", "entries allowed");
+  return Number(m[2]) === 0 ? allowed : `${allowed}, ${m[2]} never tested`;
+}
+
+const OUTCOME_WORDS: Record<string, string> = {
+  prevented: "Blocked",
+  detected: "Alerted",
+  logged: "Logged only",
+  missed: "Missed",
+  unknown: "Not recorded",
+  open: "Open",
+  in_progress: "Fix in progress",
+  fixed: "Fixed",
+};
+
+// entryDetails is the details column for one activity-log entry. Ids that mean
+// nothing to the reader (the engagement's, a finding's) are left out.
+export function entryDetails(
+  e: { action: string; target: string; detail: string },
+  engagementId: string,
+): string {
+  if (e.action === "evidence-ingested") {
+    const m = e.detail.match(/^name=(.*) sha256=([0-9a-f]+)$/);
+    if (m) return `${m[1]} · fingerprint ${m[2]!.slice(0, 12)}…`;
+  }
+  const hide = e.target === engagementId || e.action === "finding-status";
+  return activityDetails(hide ? "" : e.target, e.detail);
+}
+
+// One activity-log entry's target and detail, reworded for the reader. The
+// stored record is untouched; only its display changes.
+export function activityDetails(target: string, detail: string): string {
+  const known = (id: string) =>
+    id in MODULES ? MODULES[id]!.label : /^T\d{4}(\.\d{3})?$/.test(id) ? techniqueLabel(id) : id;
+  let d = detail;
+  const counts = d.match(/^(\d+) allowed, (\d+) denied$/);
+  const kind = d.match(/^([a-z0-9]+)\/([a-z]+)$/);
+  if (counts) d = `${counts[1]} tested, ${counts[2]} skipped`;
+  else if (kind) d = `${known(kind[1]!)}: ${kind[2]}`;
+  else if (d in OUTCOME_WORDS) d = OUTCOME_WORDS[d]!;
+  else d = scopeText(d);
+  return [known(target), d].filter((x) => x !== "").join(" · ");
+}
+
+const timeFmt = new Intl.DateTimeFormat(undefined, { timeStyle: "short" });
+
+// formatWhen says when something happened the way a person would: "Today,
+// 9:12 AM", "Yesterday, 4:41 PM", then the date.
+export function formatWhen(rfc3339: string): string {
+  const d = new Date(rfc3339);
+  if (Number.isNaN(d.getTime())) return "";
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86_400_000);
+  if (days === 0) return `Today, ${timeFmt.format(d)}`;
+  if (days === 1) return `Yesterday, ${timeFmt.format(d)}`;
+  return `${dateFmt.format(d)}, ${timeFmt.format(d)}`;
+}
+
+// Attacker techniques (MITRE ATT&CK ids) in everyday words. The id stays
+// available as a quiet second line for the people who work from it.
+const TECHNIQUES: Record<string, string> = {
+  T1190: "Attack a public-facing website",
+  T1552: "Find passwords and keys left lying around",
+  "T1552.001": "Find passwords left in files",
+  "T1552.004": "Find private keys left in files",
+  T1592: "Learn what the target is built with",
+  T1087: "List the accounts that exist",
+  T1110: "Guess passwords",
+  T1059: "Run commands on the system",
+  T1040: "Listen in on network traffic",
+  T1203: "Use a software flaw to run code",
+  T1133: "Come in through remote access",
+  T1105: "Bring in attack tools",
+  T1626: "Gain extra rights on a phone",
+  "T1505.003": "Plant a hidden back door on the web server",
+  T1078: "Sign in with a real account",
+  T1083: "Map the folders and files",
+  T1595: "Scan for weak points",
+  T1046: "Scan for open network doors",
+  T1557: "Step in between two parties",
+};
+
+export function techniqueLabel(id: string): string {
+  return TECHNIQUES[id] ?? TECHNIQUES[id.split(".")[0] ?? ""] ?? `Attacker technique ${id}`;
+}
+
+// What a line in an attack timeline shows, in everyday words.
+const LOG_EVENTS: Record<string, string> = {
+  "log-sqli": "Tried to trick the database",
+  "log-path-traversal": "Tried to read files outside the website",
+  log4shell: "Tried the Log4Shell attack",
+  "log-cmd-injection": "Tried to run commands on the server",
+  "log-reverse-shell": "Tried to open a remote control channel",
+  "log-xss": "Tried to plant script in a page",
+  "log-scanner": "Automated scanning tool",
+  "log-brute-force": "Repeated failed sign-ins",
+};
+
+export function logEventLabel(category: string): string {
+  return LOG_EVENTS[category] ?? category.replace(/^log-/, "").replace(/-/g, " ");
+}
+
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} bytes`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
