@@ -2,6 +2,8 @@
 /bin/
 /ares-server
 /ares-worker
+/ares-devseed
+/ares-practice
 *.exe
 
 # Test and coverage output
@@ -15,3 +17,6 @@ coverage.*
 # Embedded database (default path)
 /ares.db
 *.db
+
+# Local development data written by scripts/dev.sh (seeded DB, master key)
+/.dev/
