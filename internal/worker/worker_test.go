@@ -286,3 +286,90 @@ func TestProcessWithProgressPublishesPartials(t *testing.T) {
 		t.Errorf("final should have 4 results, got %d", len(final.Results))
 	}
 }
+
+// countingMod counts one step per result it emits, the way an engine module
+// reports progress with a module.Tracker.
+type countingMod struct{ n int }
+
+func (countingMod) Name() string { return "counting" }
+func (m countingMod) Run(ctx context.Context, _ module.Scope, targets []module.Target, out chan<- module.Result) error {
+	tr := module.NewTracker(ctx, m.n, false)
+	for i := 0; i < m.n; i++ {
+		tr.Start("step")
+		out <- module.Result{Capability: "counting", Kind: "info", Target: targets[0], Data: map[string]any{"i": i}}
+		tr.Done(1)
+	}
+	return nil
+}
+
+func TestProgressIsCarriedOnSnapshotsAndFinalOutcome(t *testing.T) {
+	reg := module.NewRegistry()
+	if err := reg.Register(countingMod{n: 3}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	store := engagement.NewMemStore()
+	proc := NewProcessor(reg, store)
+	eng := mustCreate(t, store)
+	_ = eng.Scope.AddInScope("example.com")
+	if err := eng.Authorize(engagement.Authorization{Document: "a.pdf", ApprovedBy: "lead"}); err != nil {
+		t.Fatalf("authorize: %v", err)
+	}
+
+	var snaps []Outcome
+	final := proc.ProcessWithProgress(context.Background(), queue.Job{
+		ID: "jc", EngagementID: eng.ID, Module: "counting", Actor: "op",
+		Targets: []module.Target{{Host: "www.example.com"}},
+	}, func(o Outcome) { snaps = append(snaps, o) })
+
+	sawProgress := false
+	for _, s := range snaps {
+		if s.Progress != nil {
+			sawProgress = true
+			if s.Progress.Total != 3 {
+				t.Errorf("snapshot progress total = %d, want 3", s.Progress.Total)
+			}
+		}
+	}
+	if !sawProgress {
+		t.Error("no snapshot carried the module's progress")
+	}
+	if final.Progress == nil || final.Progress.Done != 3 || final.Progress.Total != 3 {
+		t.Fatalf("final progress = %+v, want 3/3", final.Progress)
+	}
+	// Snapshots are independent copies: a later update must not show through.
+	if snaps[1].Progress != nil && snaps[1].Progress == final.Progress {
+		t.Error("a snapshot shares its progress with the final outcome")
+	}
+}
+
+func TestMemOutcomesEstimatesFromHistory(t *testing.T) {
+	s := NewMemOutcomes()
+	start := time.Now().Add(-time.Hour)
+	target := []module.Target{{Host: "a.example.com"}}
+	for i, d := range []time.Duration{20, 30, 40} {
+		o := Outcome{JobID: string(rune('a' + i)), Module: "webcheck", Allowed: target,
+			StartedAt: start, FinishedAt: start.Add(d * time.Second)}
+		s.Save(o)
+		s.Save(o) // saving a finished job again must not count it twice
+	}
+	// A failed run is not history.
+	s.Save(Outcome{JobID: "x", Module: "webcheck", Allowed: target, Error: "boom",
+		StartedAt: start, FinishedAt: start.Add(time.Hour)})
+
+	now := time.Now()
+	running := Outcome{JobID: "r", Module: "webcheck", Allowed: target, StartedAt: now.Add(-5 * time.Second)}
+	e := s.Estimate(running, now)
+	if e.State != "estimate" || e.Basis != "history" {
+		t.Fatalf("got %+v, want a history estimate", e)
+	}
+	if e.LowSeconds < 15 || e.HighSeconds > 35 {
+		t.Fatalf("range %d..%d s, want within 15..35 (20–40 s runs, 5 s in)", e.LowSeconds, e.HighSeconds)
+	}
+	if got := s.Estimate(Outcome{StartedAt: start, FinishedAt: now}, now); got.State != "done" {
+		t.Fatalf("finished job state = %q, want done", got.State)
+	}
+	// An unseen module has no history: no number.
+	if got := s.Estimate(Outcome{Module: "tlscheck", Allowed: target, StartedAt: now}, now); got.State != "estimating" {
+		t.Fatalf("unseen module state = %q, want estimating", got.State)
+	}
+}

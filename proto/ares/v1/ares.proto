@@ -451,6 +451,37 @@ message JobOutcome {
   // current_capability names the capability whose result arrived most recently
   // while status is "running"; empty once done. Lets a live view show motion.
   string current_capability = 9;
+  // progress is how far the job has got and how long it has left. Set while
+  // running and once done (state "done", with the final step count).
+  JobProgress progress = 10;
+}
+
+// JobProgress is a job's step count and an honest estimate of its time left:
+// a range, or no number at all ("estimating") until there is signal.
+message JobProgress {
+  // done of total steps, when the module counts its steps (0/0 otherwise).
+  // What a step is belongs to the module: a check, a port probe, a target.
+  int32 done = 1;
+  int32 total = 2;
+  // total_may_grow is true while the module may still add steps (recon before
+  // it has chosen its checks); done/total is then not a fraction of the run.
+  bool total_may_grow = 3;
+  // step names what is running now, when the module says ("tlscheck").
+  string step = 4;
+  // state: estimating | estimate | finishing | overdue | done.
+  //   estimating — not enough signal yet; show no number.
+  //   estimate   — remaining_low_seconds..remaining_high_seconds is left.
+  //   finishing  — every step is done; the job is wrapping up.
+  //   overdue    — past the top of the usual range for this check.
+  string state = 5;
+  // basis names the signal behind the estimate: "progress" (the job's own
+  // pace) or "history" (recent runs of the same check). Empty while estimating.
+  string basis = 6;
+  int64 remaining_low_seconds = 7;
+  int64 remaining_high_seconds = 8;
+  // elapsed_seconds is how long the job has run (its full duration once done).
+  int64 elapsed_seconds = 9;
+  string started_at = 10; // RFC3339
 }
 
 message ListJobsRequest {
@@ -469,6 +500,8 @@ message JobSummary {
   int32 denied = 7; // targets the gate refused
   int32 findings = 8; // findings the job raised
   string error = 9;
+  // progress is set for a job that has started; a queued job has none.
+  JobProgress progress = 10;
 }
 message ListJobsResponse {
   repeated JobSummary jobs = 1; // newest first

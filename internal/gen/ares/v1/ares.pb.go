@@ -3332,8 +3332,11 @@ type JobOutcome struct {
 	// current_capability names the capability whose result arrived most recently
 	// while status is "running"; empty once done. Lets a live view show motion.
 	CurrentCapability string `protobuf:"bytes,9,opt,name=current_capability,json=currentCapability,proto3" json:"current_capability,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// progress is how far the job has got and how long it has left. Set while
+	// running and once done (state "done", with the final step count).
+	Progress      *JobProgress `protobuf:"bytes,10,opt,name=progress,proto3" json:"progress,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JobOutcome) Reset() {
@@ -3429,6 +3432,145 @@ func (x *JobOutcome) GetCurrentCapability() string {
 	return ""
 }
 
+func (x *JobOutcome) GetProgress() *JobProgress {
+	if x != nil {
+		return x.Progress
+	}
+	return nil
+}
+
+// JobProgress is a job's step count and an honest estimate of its time left:
+// a range, or no number at all ("estimating") until there is signal.
+type JobProgress struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// done of total steps, when the module counts its steps (0/0 otherwise).
+	// What a step is belongs to the module: a check, a port probe, a target.
+	Done  int32 `protobuf:"varint,1,opt,name=done,proto3" json:"done,omitempty"`
+	Total int32 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	// total_may_grow is true while the module may still add steps (recon before
+	// it has chosen its checks); done/total is then not a fraction of the run.
+	TotalMayGrow bool `protobuf:"varint,3,opt,name=total_may_grow,json=totalMayGrow,proto3" json:"total_may_grow,omitempty"`
+	// step names what is running now, when the module says ("tlscheck").
+	Step string `protobuf:"bytes,4,opt,name=step,proto3" json:"step,omitempty"`
+	// state: estimating | estimate | finishing | overdue | done.
+	//
+	//	estimating — not enough signal yet; show no number.
+	//	estimate   — remaining_low_seconds..remaining_high_seconds is left.
+	//	finishing  — every step is done; the job is wrapping up.
+	//	overdue    — past the top of the usual range for this check.
+	State string `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`
+	// basis names the signal behind the estimate: "progress" (the job's own
+	// pace) or "history" (recent runs of the same check). Empty while estimating.
+	Basis                string `protobuf:"bytes,6,opt,name=basis,proto3" json:"basis,omitempty"`
+	RemainingLowSeconds  int64  `protobuf:"varint,7,opt,name=remaining_low_seconds,json=remainingLowSeconds,proto3" json:"remaining_low_seconds,omitempty"`
+	RemainingHighSeconds int64  `protobuf:"varint,8,opt,name=remaining_high_seconds,json=remainingHighSeconds,proto3" json:"remaining_high_seconds,omitempty"`
+	// elapsed_seconds is how long the job has run (its full duration once done).
+	ElapsedSeconds int64  `protobuf:"varint,9,opt,name=elapsed_seconds,json=elapsedSeconds,proto3" json:"elapsed_seconds,omitempty"`
+	StartedAt      string `protobuf:"bytes,10,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"` // RFC3339
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *JobProgress) Reset() {
+	*x = JobProgress{}
+	mi := &file_ares_v1_ares_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JobProgress) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JobProgress) ProtoMessage() {}
+
+func (x *JobProgress) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JobProgress.ProtoReflect.Descriptor instead.
+func (*JobProgress) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *JobProgress) GetDone() int32 {
+	if x != nil {
+		return x.Done
+	}
+	return 0
+}
+
+func (x *JobProgress) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *JobProgress) GetTotalMayGrow() bool {
+	if x != nil {
+		return x.TotalMayGrow
+	}
+	return false
+}
+
+func (x *JobProgress) GetStep() string {
+	if x != nil {
+		return x.Step
+	}
+	return ""
+}
+
+func (x *JobProgress) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *JobProgress) GetBasis() string {
+	if x != nil {
+		return x.Basis
+	}
+	return ""
+}
+
+func (x *JobProgress) GetRemainingLowSeconds() int64 {
+	if x != nil {
+		return x.RemainingLowSeconds
+	}
+	return 0
+}
+
+func (x *JobProgress) GetRemainingHighSeconds() int64 {
+	if x != nil {
+		return x.RemainingHighSeconds
+	}
+	return 0
+}
+
+func (x *JobProgress) GetElapsedSeconds() int64 {
+	if x != nil {
+		return x.ElapsedSeconds
+	}
+	return 0
+}
+
+func (x *JobProgress) GetStartedAt() string {
+	if x != nil {
+		return x.StartedAt
+	}
+	return ""
+}
+
 type ListJobsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EngagementId  string                 `protobuf:"bytes,1,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
@@ -3439,7 +3581,7 @@ type ListJobsRequest struct {
 
 func (x *ListJobsRequest) Reset() {
 	*x = ListJobsRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[52]
+	mi := &file_ares_v1_ares_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3451,7 +3593,7 @@ func (x *ListJobsRequest) String() string {
 func (*ListJobsRequest) ProtoMessage() {}
 
 func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[52]
+	mi := &file_ares_v1_ares_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3464,7 +3606,7 @@ func (x *ListJobsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJobsRequest.ProtoReflect.Descriptor instead.
 func (*ListJobsRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{52}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListJobsRequest) GetEngagementId() string {
@@ -3484,23 +3626,25 @@ func (x *ListJobsRequest) GetTenantId() string {
 // JobSummary is one completed job without its results — enough to list the
 // "earlier tests" and reopen one with GetJob.
 type JobSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	Module        string                 `protobuf:"bytes,2,opt,name=module,proto3" json:"module,omitempty"`
-	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`                           // running | done | error
-	StartedAt     string                 `protobuf:"bytes,4,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`    // RFC3339
-	FinishedAt    string                 `protobuf:"bytes,5,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"` // RFC3339
-	Allowed       int32                  `protobuf:"varint,6,opt,name=allowed,proto3" json:"allowed,omitempty"`                        // targets the gate permitted
-	Denied        int32                  `protobuf:"varint,7,opt,name=denied,proto3" json:"denied,omitempty"`                          // targets the gate refused
-	Findings      int32                  `protobuf:"varint,8,opt,name=findings,proto3" json:"findings,omitempty"`                      // findings the job raised
-	Error         string                 `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	JobId      string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Module     string                 `protobuf:"bytes,2,opt,name=module,proto3" json:"module,omitempty"`
+	Status     string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`                           // running | done | error
+	StartedAt  string                 `protobuf:"bytes,4,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`    // RFC3339
+	FinishedAt string                 `protobuf:"bytes,5,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"` // RFC3339
+	Allowed    int32                  `protobuf:"varint,6,opt,name=allowed,proto3" json:"allowed,omitempty"`                        // targets the gate permitted
+	Denied     int32                  `protobuf:"varint,7,opt,name=denied,proto3" json:"denied,omitempty"`                          // targets the gate refused
+	Findings   int32                  `protobuf:"varint,8,opt,name=findings,proto3" json:"findings,omitempty"`                      // findings the job raised
+	Error      string                 `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty"`
+	// progress is set for a job that has started; a queued job has none.
+	Progress      *JobProgress `protobuf:"bytes,10,opt,name=progress,proto3" json:"progress,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *JobSummary) Reset() {
 	*x = JobSummary{}
-	mi := &file_ares_v1_ares_proto_msgTypes[53]
+	mi := &file_ares_v1_ares_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3512,7 +3656,7 @@ func (x *JobSummary) String() string {
 func (*JobSummary) ProtoMessage() {}
 
 func (x *JobSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[53]
+	mi := &file_ares_v1_ares_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3525,7 +3669,7 @@ func (x *JobSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobSummary.ProtoReflect.Descriptor instead.
 func (*JobSummary) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{53}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *JobSummary) GetJobId() string {
@@ -3591,6 +3735,13 @@ func (x *JobSummary) GetError() string {
 	return ""
 }
 
+func (x *JobSummary) GetProgress() *JobProgress {
+	if x != nil {
+		return x.Progress
+	}
+	return nil
+}
+
 type ListJobsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Jobs          []*JobSummary          `protobuf:"bytes,1,rep,name=jobs,proto3" json:"jobs,omitempty"` // newest first
@@ -3600,7 +3751,7 @@ type ListJobsResponse struct {
 
 func (x *ListJobsResponse) Reset() {
 	*x = ListJobsResponse{}
-	mi := &file_ares_v1_ares_proto_msgTypes[54]
+	mi := &file_ares_v1_ares_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3612,7 +3763,7 @@ func (x *ListJobsResponse) String() string {
 func (*ListJobsResponse) ProtoMessage() {}
 
 func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[54]
+	mi := &file_ares_v1_ares_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3625,7 +3776,7 @@ func (x *ListJobsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJobsResponse.ProtoReflect.Descriptor instead.
 func (*ListJobsResponse) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{54}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ListJobsResponse) GetJobs() []*JobSummary {
@@ -3658,7 +3809,7 @@ type Finding struct {
 
 func (x *Finding) Reset() {
 	*x = Finding{}
-	mi := &file_ares_v1_ares_proto_msgTypes[55]
+	mi := &file_ares_v1_ares_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3670,7 +3821,7 @@ func (x *Finding) String() string {
 func (*Finding) ProtoMessage() {}
 
 func (x *Finding) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[55]
+	mi := &file_ares_v1_ares_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3683,7 +3834,7 @@ func (x *Finding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Finding.ProtoReflect.Descriptor instead.
 func (*Finding) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{55}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *Finding) GetId() string {
@@ -3787,7 +3938,7 @@ type ListFindingsRequest struct {
 
 func (x *ListFindingsRequest) Reset() {
 	*x = ListFindingsRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[56]
+	mi := &file_ares_v1_ares_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3799,7 +3950,7 @@ func (x *ListFindingsRequest) String() string {
 func (*ListFindingsRequest) ProtoMessage() {}
 
 func (x *ListFindingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[56]
+	mi := &file_ares_v1_ares_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3812,7 +3963,7 @@ func (x *ListFindingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFindingsRequest.ProtoReflect.Descriptor instead.
 func (*ListFindingsRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{56}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ListFindingsRequest) GetTenantId() string {
@@ -3838,7 +3989,7 @@ type ListFindingsResponse struct {
 
 func (x *ListFindingsResponse) Reset() {
 	*x = ListFindingsResponse{}
-	mi := &file_ares_v1_ares_proto_msgTypes[57]
+	mi := &file_ares_v1_ares_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3850,7 +4001,7 @@ func (x *ListFindingsResponse) String() string {
 func (*ListFindingsResponse) ProtoMessage() {}
 
 func (x *ListFindingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[57]
+	mi := &file_ares_v1_ares_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3863,7 +4014,7 @@ func (x *ListFindingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFindingsResponse.ProtoReflect.Descriptor instead.
 func (*ListFindingsResponse) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{57}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ListFindingsResponse) GetFindings() []*Finding {
@@ -3885,7 +4036,7 @@ type SetFindingStatusRequest struct {
 
 func (x *SetFindingStatusRequest) Reset() {
 	*x = SetFindingStatusRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[58]
+	mi := &file_ares_v1_ares_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3897,7 +4048,7 @@ func (x *SetFindingStatusRequest) String() string {
 func (*SetFindingStatusRequest) ProtoMessage() {}
 
 func (x *SetFindingStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[58]
+	mi := &file_ares_v1_ares_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3910,7 +4061,7 @@ func (x *SetFindingStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetFindingStatusRequest.ProtoReflect.Descriptor instead.
 func (*SetFindingStatusRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{58}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *SetFindingStatusRequest) GetTenantId() string {
@@ -3957,7 +4108,7 @@ type AuditEntry struct {
 
 func (x *AuditEntry) Reset() {
 	*x = AuditEntry{}
-	mi := &file_ares_v1_ares_proto_msgTypes[59]
+	mi := &file_ares_v1_ares_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3969,7 +4120,7 @@ func (x *AuditEntry) String() string {
 func (*AuditEntry) ProtoMessage() {}
 
 func (x *AuditEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[59]
+	mi := &file_ares_v1_ares_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3982,7 +4133,7 @@ func (x *AuditEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEntry.ProtoReflect.Descriptor instead.
 func (*AuditEntry) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{59}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *AuditEntry) GetSeq() int32 {
@@ -4051,7 +4202,7 @@ type GetAuditRequest struct {
 
 func (x *GetAuditRequest) Reset() {
 	*x = GetAuditRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[60]
+	mi := &file_ares_v1_ares_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4063,7 +4214,7 @@ func (x *GetAuditRequest) String() string {
 func (*GetAuditRequest) ProtoMessage() {}
 
 func (x *GetAuditRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[60]
+	mi := &file_ares_v1_ares_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4076,7 +4227,7 @@ func (x *GetAuditRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuditRequest.ProtoReflect.Descriptor instead.
 func (*GetAuditRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{60}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *GetAuditRequest) GetId() string {
@@ -4104,7 +4255,7 @@ type GenerateReportRequest struct {
 
 func (x *GenerateReportRequest) Reset() {
 	*x = GenerateReportRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[61]
+	mi := &file_ares_v1_ares_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4116,7 +4267,7 @@ func (x *GenerateReportRequest) String() string {
 func (*GenerateReportRequest) ProtoMessage() {}
 
 func (x *GenerateReportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[61]
+	mi := &file_ares_v1_ares_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4129,7 +4280,7 @@ func (x *GenerateReportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateReportRequest.ProtoReflect.Descriptor instead.
 func (*GenerateReportRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{61}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *GenerateReportRequest) GetId() string {
@@ -4164,7 +4315,7 @@ type GenerateReportResponse struct {
 
 func (x *GenerateReportResponse) Reset() {
 	*x = GenerateReportResponse{}
-	mi := &file_ares_v1_ares_proto_msgTypes[62]
+	mi := &file_ares_v1_ares_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4176,7 +4327,7 @@ func (x *GenerateReportResponse) String() string {
 func (*GenerateReportResponse) ProtoMessage() {}
 
 func (x *GenerateReportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[62]
+	mi := &file_ares_v1_ares_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4189,7 +4340,7 @@ func (x *GenerateReportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateReportResponse.ProtoReflect.Descriptor instead.
 func (*GenerateReportResponse) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{62}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *GenerateReportResponse) GetFilename() string {
@@ -4223,7 +4374,7 @@ type GetAuditResponse struct {
 
 func (x *GetAuditResponse) Reset() {
 	*x = GetAuditResponse{}
-	mi := &file_ares_v1_ares_proto_msgTypes[63]
+	mi := &file_ares_v1_ares_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4235,7 +4386,7 @@ func (x *GetAuditResponse) String() string {
 func (*GetAuditResponse) ProtoMessage() {}
 
 func (x *GetAuditResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[63]
+	mi := &file_ares_v1_ares_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4248,7 +4399,7 @@ func (x *GetAuditResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuditResponse.ProtoReflect.Descriptor instead.
 func (*GetAuditResponse) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{63}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *GetAuditResponse) GetEntries() []*AuditEntry {
@@ -4278,7 +4429,7 @@ type TechniqueStatus struct {
 
 func (x *TechniqueStatus) Reset() {
 	*x = TechniqueStatus{}
-	mi := &file_ares_v1_ares_proto_msgTypes[64]
+	mi := &file_ares_v1_ares_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4290,7 +4441,7 @@ func (x *TechniqueStatus) String() string {
 func (*TechniqueStatus) ProtoMessage() {}
 
 func (x *TechniqueStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[64]
+	mi := &file_ares_v1_ares_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4303,7 +4454,7 @@ func (x *TechniqueStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TechniqueStatus.ProtoReflect.Descriptor instead.
 func (*TechniqueStatus) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{64}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *TechniqueStatus) GetTechnique() string {
@@ -4347,7 +4498,7 @@ type DetectionSummary struct {
 
 func (x *DetectionSummary) Reset() {
 	*x = DetectionSummary{}
-	mi := &file_ares_v1_ares_proto_msgTypes[65]
+	mi := &file_ares_v1_ares_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4359,7 +4510,7 @@ func (x *DetectionSummary) String() string {
 func (*DetectionSummary) ProtoMessage() {}
 
 func (x *DetectionSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[65]
+	mi := &file_ares_v1_ares_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4372,7 +4523,7 @@ func (x *DetectionSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetectionSummary.ProtoReflect.Descriptor instead.
 func (*DetectionSummary) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{65}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *DetectionSummary) GetTechniques() []*TechniqueStatus {
@@ -4420,7 +4571,7 @@ type GetDetectionSummaryRequest struct {
 
 func (x *GetDetectionSummaryRequest) Reset() {
 	*x = GetDetectionSummaryRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[66]
+	mi := &file_ares_v1_ares_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4432,7 +4583,7 @@ func (x *GetDetectionSummaryRequest) String() string {
 func (*GetDetectionSummaryRequest) ProtoMessage() {}
 
 func (x *GetDetectionSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[66]
+	mi := &file_ares_v1_ares_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4445,7 +4596,7 @@ func (x *GetDetectionSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDetectionSummaryRequest.ProtoReflect.Descriptor instead.
 func (*GetDetectionSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{66}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *GetDetectionSummaryRequest) GetId() string {
@@ -4474,7 +4625,7 @@ type PathStep struct {
 
 func (x *PathStep) Reset() {
 	*x = PathStep{}
-	mi := &file_ares_v1_ares_proto_msgTypes[67]
+	mi := &file_ares_v1_ares_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4486,7 +4637,7 @@ func (x *PathStep) String() string {
 func (*PathStep) ProtoMessage() {}
 
 func (x *PathStep) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[67]
+	mi := &file_ares_v1_ares_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4499,7 +4650,7 @@ func (x *PathStep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PathStep.ProtoReflect.Descriptor instead.
 func (*PathStep) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{67}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *PathStep) GetTitle() string {
@@ -4538,7 +4689,7 @@ type AttackPath struct {
 
 func (x *AttackPath) Reset() {
 	*x = AttackPath{}
-	mi := &file_ares_v1_ares_proto_msgTypes[68]
+	mi := &file_ares_v1_ares_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4550,7 +4701,7 @@ func (x *AttackPath) String() string {
 func (*AttackPath) ProtoMessage() {}
 
 func (x *AttackPath) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[68]
+	mi := &file_ares_v1_ares_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4563,7 +4714,7 @@ func (x *AttackPath) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttackPath.ProtoReflect.Descriptor instead.
 func (*AttackPath) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{68}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *AttackPath) GetName() string {
@@ -4622,7 +4773,7 @@ type RiskPicture struct {
 
 func (x *RiskPicture) Reset() {
 	*x = RiskPicture{}
-	mi := &file_ares_v1_ares_proto_msgTypes[69]
+	mi := &file_ares_v1_ares_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4634,7 +4785,7 @@ func (x *RiskPicture) String() string {
 func (*RiskPicture) ProtoMessage() {}
 
 func (x *RiskPicture) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[69]
+	mi := &file_ares_v1_ares_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4647,7 +4798,7 @@ func (x *RiskPicture) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RiskPicture.ProtoReflect.Descriptor instead.
 func (*RiskPicture) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{69}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *RiskPicture) GetTarget() string {
@@ -4695,7 +4846,7 @@ type GetRiskPictureRequest struct {
 
 func (x *GetRiskPictureRequest) Reset() {
 	*x = GetRiskPictureRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[70]
+	mi := &file_ares_v1_ares_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4707,7 +4858,7 @@ func (x *GetRiskPictureRequest) String() string {
 func (*GetRiskPictureRequest) ProtoMessage() {}
 
 func (x *GetRiskPictureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[70]
+	mi := &file_ares_v1_ares_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4720,7 +4871,7 @@ func (x *GetRiskPictureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRiskPictureRequest.ProtoReflect.Descriptor instead.
 func (*GetRiskPictureRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{70}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *GetRiskPictureRequest) GetId() string {
@@ -4751,7 +4902,7 @@ type SetDetectionRequest struct {
 
 func (x *SetDetectionRequest) Reset() {
 	*x = SetDetectionRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[71]
+	mi := &file_ares_v1_ares_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4763,7 +4914,7 @@ func (x *SetDetectionRequest) String() string {
 func (*SetDetectionRequest) ProtoMessage() {}
 
 func (x *SetDetectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[71]
+	mi := &file_ares_v1_ares_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4776,7 +4927,7 @@ func (x *SetDetectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDetectionRequest.ProtoReflect.Descriptor instead.
 func (*SetDetectionRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{71}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *SetDetectionRequest) GetId() string {
@@ -4835,7 +4986,7 @@ type PurpleCoverage struct {
 
 func (x *PurpleCoverage) Reset() {
 	*x = PurpleCoverage{}
-	mi := &file_ares_v1_ares_proto_msgTypes[72]
+	mi := &file_ares_v1_ares_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4847,7 +4998,7 @@ func (x *PurpleCoverage) String() string {
 func (*PurpleCoverage) ProtoMessage() {}
 
 func (x *PurpleCoverage) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[72]
+	mi := &file_ares_v1_ares_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4860,7 +5011,7 @@ func (x *PurpleCoverage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurpleCoverage.ProtoReflect.Descriptor instead.
 func (*PurpleCoverage) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{72}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *PurpleCoverage) GetTotal() int32 {
@@ -4912,7 +5063,7 @@ type PurpleStep struct {
 
 func (x *PurpleStep) Reset() {
 	*x = PurpleStep{}
-	mi := &file_ares_v1_ares_proto_msgTypes[73]
+	mi := &file_ares_v1_ares_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4924,7 +5075,7 @@ func (x *PurpleStep) String() string {
 func (*PurpleStep) ProtoMessage() {}
 
 func (x *PurpleStep) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[73]
+	mi := &file_ares_v1_ares_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4937,7 +5088,7 @@ func (x *PurpleStep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurpleStep.ProtoReflect.Descriptor instead.
 func (*PurpleStep) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{73}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *PurpleStep) GetOrder() int32 {
@@ -5034,7 +5185,7 @@ type PurpleTemplateSummary struct {
 
 func (x *PurpleTemplateSummary) Reset() {
 	*x = PurpleTemplateSummary{}
-	mi := &file_ares_v1_ares_proto_msgTypes[74]
+	mi := &file_ares_v1_ares_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5046,7 +5197,7 @@ func (x *PurpleTemplateSummary) String() string {
 func (*PurpleTemplateSummary) ProtoMessage() {}
 
 func (x *PurpleTemplateSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[74]
+	mi := &file_ares_v1_ares_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5059,7 +5210,7 @@ func (x *PurpleTemplateSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurpleTemplateSummary.ProtoReflect.Descriptor instead.
 func (*PurpleTemplateSummary) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{74}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *PurpleTemplateSummary) GetId() string {
@@ -5126,7 +5277,7 @@ type PurpleTemplate struct {
 
 func (x *PurpleTemplate) Reset() {
 	*x = PurpleTemplate{}
-	mi := &file_ares_v1_ares_proto_msgTypes[75]
+	mi := &file_ares_v1_ares_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5138,7 +5289,7 @@ func (x *PurpleTemplate) String() string {
 func (*PurpleTemplate) ProtoMessage() {}
 
 func (x *PurpleTemplate) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[75]
+	mi := &file_ares_v1_ares_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5151,7 +5302,7 @@ func (x *PurpleTemplate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PurpleTemplate.ProtoReflect.Descriptor instead.
 func (*PurpleTemplate) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{75}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *PurpleTemplate) GetId() string {
@@ -5208,7 +5359,7 @@ type ListPurpleTemplatesRequest struct {
 
 func (x *ListPurpleTemplatesRequest) Reset() {
 	*x = ListPurpleTemplatesRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[76]
+	mi := &file_ares_v1_ares_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5220,7 +5371,7 @@ func (x *ListPurpleTemplatesRequest) String() string {
 func (*ListPurpleTemplatesRequest) ProtoMessage() {}
 
 func (x *ListPurpleTemplatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[76]
+	mi := &file_ares_v1_ares_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5233,7 +5384,7 @@ func (x *ListPurpleTemplatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPurpleTemplatesRequest.ProtoReflect.Descriptor instead.
 func (*ListPurpleTemplatesRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{76}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *ListPurpleTemplatesRequest) GetEngagementId() string {
@@ -5259,7 +5410,7 @@ type ListPurpleTemplatesResponse struct {
 
 func (x *ListPurpleTemplatesResponse) Reset() {
 	*x = ListPurpleTemplatesResponse{}
-	mi := &file_ares_v1_ares_proto_msgTypes[77]
+	mi := &file_ares_v1_ares_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5271,7 +5422,7 @@ func (x *ListPurpleTemplatesResponse) String() string {
 func (*ListPurpleTemplatesResponse) ProtoMessage() {}
 
 func (x *ListPurpleTemplatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[77]
+	mi := &file_ares_v1_ares_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5284,7 +5435,7 @@ func (x *ListPurpleTemplatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPurpleTemplatesResponse.ProtoReflect.Descriptor instead.
 func (*ListPurpleTemplatesResponse) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{77}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *ListPurpleTemplatesResponse) GetTemplates() []*PurpleTemplateSummary {
@@ -5305,7 +5456,7 @@ type GetPurpleTemplateRequest struct {
 
 func (x *GetPurpleTemplateRequest) Reset() {
 	*x = GetPurpleTemplateRequest{}
-	mi := &file_ares_v1_ares_proto_msgTypes[78]
+	mi := &file_ares_v1_ares_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5317,7 +5468,7 @@ func (x *GetPurpleTemplateRequest) String() string {
 func (*GetPurpleTemplateRequest) ProtoMessage() {}
 
 func (x *GetPurpleTemplateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ares_v1_ares_proto_msgTypes[78]
+	mi := &file_ares_v1_ares_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5330,7 +5481,7 @@ func (x *GetPurpleTemplateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPurpleTemplateRequest.ProtoReflect.Descriptor instead.
 func (*GetPurpleTemplateRequest) Descriptor() ([]byte, []int) {
-	return file_ares_v1_ares_proto_rawDescGZIP(), []int{78}
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *GetPurpleTemplateRequest) GetEngagementId() string {
@@ -5613,7 +5764,7 @@ const file_ares_v1_ares_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\tR\x06status\"C\n" +
 	"\rGetJobRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"\xb7\x02\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"\xe9\x02\n" +
 	"\n" +
 	"JobOutcome\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x15\n" +
@@ -5626,10 +5777,25 @@ const file_ares_v1_ares_proto_rawDesc = "" +
 	"\x06denied\x18\x06 \x03(\v2\x0f.ares.v1.DenialR\x06denied\x12)\n" +
 	"\aresults\x18\a \x03(\v2\x0f.ares.v1.ResultR\aresults\x12\x14\n" +
 	"\x05error\x18\b \x01(\tR\x05error\x12-\n" +
-	"\x12current_capability\x18\t \x01(\tR\x11currentCapability\"S\n" +
+	"\x12current_capability\x18\t \x01(\tR\x11currentCapability\x120\n" +
+	"\bprogress\x18\n" +
+	" \x01(\v2\x14.ares.v1.JobProgressR\bprogress\"\xcf\x02\n" +
+	"\vJobProgress\x12\x12\n" +
+	"\x04done\x18\x01 \x01(\x05R\x04done\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12$\n" +
+	"\x0etotal_may_grow\x18\x03 \x01(\bR\ftotalMayGrow\x12\x12\n" +
+	"\x04step\x18\x04 \x01(\tR\x04step\x12\x14\n" +
+	"\x05state\x18\x05 \x01(\tR\x05state\x12\x14\n" +
+	"\x05basis\x18\x06 \x01(\tR\x05basis\x122\n" +
+	"\x15remaining_low_seconds\x18\a \x01(\x03R\x13remainingLowSeconds\x124\n" +
+	"\x16remaining_high_seconds\x18\b \x01(\x03R\x14remainingHighSeconds\x12'\n" +
+	"\x0felapsed_seconds\x18\t \x01(\x03R\x0eelapsedSeconds\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\n" +
+	" \x01(\tR\tstartedAt\"S\n" +
 	"\x0fListJobsRequest\x12#\n" +
 	"\rengagement_id\x18\x01 \x01(\tR\fengagementId\x12\x1b\n" +
-	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"\xf7\x01\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"\xa9\x02\n" +
 	"\n" +
 	"JobSummary\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n" +
@@ -5642,7 +5808,9 @@ const file_ares_v1_ares_proto_rawDesc = "" +
 	"\aallowed\x18\x06 \x01(\x05R\aallowed\x12\x16\n" +
 	"\x06denied\x18\a \x01(\x05R\x06denied\x12\x1a\n" +
 	"\bfindings\x18\b \x01(\x05R\bfindings\x12\x14\n" +
-	"\x05error\x18\t \x01(\tR\x05error\";\n" +
+	"\x05error\x18\t \x01(\tR\x05error\x120\n" +
+	"\bprogress\x18\n" +
+	" \x01(\v2\x14.ares.v1.JobProgressR\bprogress\";\n" +
 	"\x10ListJobsResponse\x12'\n" +
 	"\x04jobs\x18\x01 \x03(\v2\x13.ares.v1.JobSummaryR\x04jobs\"\x82\x03\n" +
 	"\aFinding\x12\x0e\n" +
@@ -5842,7 +6010,7 @@ func file_ares_v1_ares_proto_rawDescGZIP() []byte {
 	return file_ares_v1_ares_proto_rawDescData
 }
 
-var file_ares_v1_ares_proto_msgTypes = make([]protoimpl.MessageInfo, 81)
+var file_ares_v1_ares_proto_msgTypes = make([]protoimpl.MessageInfo, 82)
 var file_ares_v1_ares_proto_goTypes = []any{
 	(*AdviseRequest)(nil),                  // 0: ares.v1.AdviseRequest
 	(*AdviseResponse)(nil),                 // 1: ares.v1.AdviseResponse
@@ -5896,36 +6064,37 @@ var file_ares_v1_ares_proto_goTypes = []any{
 	(*DispatchJobResponse)(nil),            // 49: ares.v1.DispatchJobResponse
 	(*GetJobRequest)(nil),                  // 50: ares.v1.GetJobRequest
 	(*JobOutcome)(nil),                     // 51: ares.v1.JobOutcome
-	(*ListJobsRequest)(nil),                // 52: ares.v1.ListJobsRequest
-	(*JobSummary)(nil),                     // 53: ares.v1.JobSummary
-	(*ListJobsResponse)(nil),               // 54: ares.v1.ListJobsResponse
-	(*Finding)(nil),                        // 55: ares.v1.Finding
-	(*ListFindingsRequest)(nil),            // 56: ares.v1.ListFindingsRequest
-	(*ListFindingsResponse)(nil),           // 57: ares.v1.ListFindingsResponse
-	(*SetFindingStatusRequest)(nil),        // 58: ares.v1.SetFindingStatusRequest
-	(*AuditEntry)(nil),                     // 59: ares.v1.AuditEntry
-	(*GetAuditRequest)(nil),                // 60: ares.v1.GetAuditRequest
-	(*GenerateReportRequest)(nil),          // 61: ares.v1.GenerateReportRequest
-	(*GenerateReportResponse)(nil),         // 62: ares.v1.GenerateReportResponse
-	(*GetAuditResponse)(nil),               // 63: ares.v1.GetAuditResponse
-	(*TechniqueStatus)(nil),                // 64: ares.v1.TechniqueStatus
-	(*DetectionSummary)(nil),               // 65: ares.v1.DetectionSummary
-	(*GetDetectionSummaryRequest)(nil),     // 66: ares.v1.GetDetectionSummaryRequest
-	(*PathStep)(nil),                       // 67: ares.v1.PathStep
-	(*AttackPath)(nil),                     // 68: ares.v1.AttackPath
-	(*RiskPicture)(nil),                    // 69: ares.v1.RiskPicture
-	(*GetRiskPictureRequest)(nil),          // 70: ares.v1.GetRiskPictureRequest
-	(*SetDetectionRequest)(nil),            // 71: ares.v1.SetDetectionRequest
-	(*PurpleCoverage)(nil),                 // 72: ares.v1.PurpleCoverage
-	(*PurpleStep)(nil),                     // 73: ares.v1.PurpleStep
-	(*PurpleTemplateSummary)(nil),          // 74: ares.v1.PurpleTemplateSummary
-	(*PurpleTemplate)(nil),                 // 75: ares.v1.PurpleTemplate
-	(*ListPurpleTemplatesRequest)(nil),     // 76: ares.v1.ListPurpleTemplatesRequest
-	(*ListPurpleTemplatesResponse)(nil),    // 77: ares.v1.ListPurpleTemplatesResponse
-	(*GetPurpleTemplateRequest)(nil),       // 78: ares.v1.GetPurpleTemplateRequest
-	nil,                                    // 79: ares.v1.DetectionSummary.CountsEntry
-	nil,                                    // 80: ares.v1.PurpleCoverage.CountsEntry
-	(*structpb.Struct)(nil),                // 81: google.protobuf.Struct
+	(*JobProgress)(nil),                    // 52: ares.v1.JobProgress
+	(*ListJobsRequest)(nil),                // 53: ares.v1.ListJobsRequest
+	(*JobSummary)(nil),                     // 54: ares.v1.JobSummary
+	(*ListJobsResponse)(nil),               // 55: ares.v1.ListJobsResponse
+	(*Finding)(nil),                        // 56: ares.v1.Finding
+	(*ListFindingsRequest)(nil),            // 57: ares.v1.ListFindingsRequest
+	(*ListFindingsResponse)(nil),           // 58: ares.v1.ListFindingsResponse
+	(*SetFindingStatusRequest)(nil),        // 59: ares.v1.SetFindingStatusRequest
+	(*AuditEntry)(nil),                     // 60: ares.v1.AuditEntry
+	(*GetAuditRequest)(nil),                // 61: ares.v1.GetAuditRequest
+	(*GenerateReportRequest)(nil),          // 62: ares.v1.GenerateReportRequest
+	(*GenerateReportResponse)(nil),         // 63: ares.v1.GenerateReportResponse
+	(*GetAuditResponse)(nil),               // 64: ares.v1.GetAuditResponse
+	(*TechniqueStatus)(nil),                // 65: ares.v1.TechniqueStatus
+	(*DetectionSummary)(nil),               // 66: ares.v1.DetectionSummary
+	(*GetDetectionSummaryRequest)(nil),     // 67: ares.v1.GetDetectionSummaryRequest
+	(*PathStep)(nil),                       // 68: ares.v1.PathStep
+	(*AttackPath)(nil),                     // 69: ares.v1.AttackPath
+	(*RiskPicture)(nil),                    // 70: ares.v1.RiskPicture
+	(*GetRiskPictureRequest)(nil),          // 71: ares.v1.GetRiskPictureRequest
+	(*SetDetectionRequest)(nil),            // 72: ares.v1.SetDetectionRequest
+	(*PurpleCoverage)(nil),                 // 73: ares.v1.PurpleCoverage
+	(*PurpleStep)(nil),                     // 74: ares.v1.PurpleStep
+	(*PurpleTemplateSummary)(nil),          // 75: ares.v1.PurpleTemplateSummary
+	(*PurpleTemplate)(nil),                 // 76: ares.v1.PurpleTemplate
+	(*ListPurpleTemplatesRequest)(nil),     // 77: ares.v1.ListPurpleTemplatesRequest
+	(*ListPurpleTemplatesResponse)(nil),    // 78: ares.v1.ListPurpleTemplatesResponse
+	(*GetPurpleTemplateRequest)(nil),       // 79: ares.v1.GetPurpleTemplateRequest
+	nil,                                    // 80: ares.v1.DetectionSummary.CountsEntry
+	nil,                                    // 81: ares.v1.PurpleCoverage.CountsEntry
+	(*structpb.Struct)(nil),                // 82: google.protobuf.Struct
 }
 var file_ares_v1_ares_proto_depIdxs = []int32{
 	2,  // 0: ares.v1.SettingsView.ai:type_name -> ares.v1.AISettings
@@ -5943,100 +6112,102 @@ var file_ares_v1_ares_proto_depIdxs = []int32{
 	31, // 12: ares.v1.SetScopeRequest.window:type_name -> ares.v1.Window
 	30, // 13: ares.v1.Denial.target:type_name -> ares.v1.Target
 	30, // 14: ares.v1.Result.target:type_name -> ares.v1.Target
-	81, // 15: ares.v1.Result.data:type_name -> google.protobuf.Struct
+	82, // 15: ares.v1.Result.data:type_name -> google.protobuf.Struct
 	30, // 16: ares.v1.DispatchJobRequest.targets:type_name -> ares.v1.Target
-	81, // 17: ares.v1.DispatchJobRequest.params:type_name -> google.protobuf.Struct
+	82, // 17: ares.v1.DispatchJobRequest.params:type_name -> google.protobuf.Struct
 	30, // 18: ares.v1.JobOutcome.allowed:type_name -> ares.v1.Target
 	46, // 19: ares.v1.JobOutcome.denied:type_name -> ares.v1.Denial
 	47, // 20: ares.v1.JobOutcome.results:type_name -> ares.v1.Result
-	53, // 21: ares.v1.ListJobsResponse.jobs:type_name -> ares.v1.JobSummary
-	81, // 22: ares.v1.Finding.data:type_name -> google.protobuf.Struct
-	55, // 23: ares.v1.ListFindingsResponse.findings:type_name -> ares.v1.Finding
-	59, // 24: ares.v1.GetAuditResponse.entries:type_name -> ares.v1.AuditEntry
-	64, // 25: ares.v1.DetectionSummary.techniques:type_name -> ares.v1.TechniqueStatus
-	79, // 26: ares.v1.DetectionSummary.counts:type_name -> ares.v1.DetectionSummary.CountsEntry
-	67, // 27: ares.v1.AttackPath.steps:type_name -> ares.v1.PathStep
-	68, // 28: ares.v1.RiskPicture.paths:type_name -> ares.v1.AttackPath
-	80, // 29: ares.v1.PurpleCoverage.counts:type_name -> ares.v1.PurpleCoverage.CountsEntry
-	72, // 30: ares.v1.PurpleTemplateSummary.coverage:type_name -> ares.v1.PurpleCoverage
-	73, // 31: ares.v1.PurpleTemplate.steps:type_name -> ares.v1.PurpleStep
-	72, // 32: ares.v1.PurpleTemplate.coverage:type_name -> ares.v1.PurpleCoverage
-	74, // 33: ares.v1.ListPurpleTemplatesResponse.templates:type_name -> ares.v1.PurpleTemplateSummary
-	34, // 34: ares.v1.ControlPlane.ListModules:input_type -> ares.v1.ListModulesRequest
-	36, // 35: ares.v1.ControlPlane.CreateTenant:input_type -> ares.v1.CreateTenantRequest
-	37, // 36: ares.v1.ControlPlane.ListTenants:input_type -> ares.v1.ListTenantsRequest
-	39, // 37: ares.v1.ControlPlane.CreateEngagement:input_type -> ares.v1.CreateEngagementRequest
-	40, // 38: ares.v1.ControlPlane.ListEngagements:input_type -> ares.v1.ListEngagementsRequest
-	42, // 39: ares.v1.ControlPlane.GetEngagement:input_type -> ares.v1.GetEngagementRequest
-	43, // 40: ares.v1.ControlPlane.SetScope:input_type -> ares.v1.SetScopeRequest
-	44, // 41: ares.v1.ControlPlane.Authorize:input_type -> ares.v1.AuthorizeRequest
-	45, // 42: ares.v1.ControlPlane.Halt:input_type -> ares.v1.HaltRequest
-	48, // 43: ares.v1.ControlPlane.DispatchJob:input_type -> ares.v1.DispatchJobRequest
-	50, // 44: ares.v1.ControlPlane.GetJob:input_type -> ares.v1.GetJobRequest
-	52, // 45: ares.v1.ControlPlane.ListJobs:input_type -> ares.v1.ListJobsRequest
-	56, // 46: ares.v1.ControlPlane.ListFindings:input_type -> ares.v1.ListFindingsRequest
-	58, // 47: ares.v1.ControlPlane.SetFindingStatus:input_type -> ares.v1.SetFindingStatusRequest
-	60, // 48: ares.v1.ControlPlane.GetAudit:input_type -> ares.v1.GetAuditRequest
-	61, // 49: ares.v1.ControlPlane.GenerateReport:input_type -> ares.v1.GenerateReportRequest
-	66, // 50: ares.v1.ControlPlane.GetDetectionSummary:input_type -> ares.v1.GetDetectionSummaryRequest
-	71, // 51: ares.v1.ControlPlane.SetDetection:input_type -> ares.v1.SetDetectionRequest
-	70, // 52: ares.v1.ControlPlane.GetRiskPicture:input_type -> ares.v1.GetRiskPictureRequest
-	76, // 53: ares.v1.ControlPlane.ListPurpleTemplates:input_type -> ares.v1.ListPurpleTemplatesRequest
-	78, // 54: ares.v1.ControlPlane.GetPurpleTemplate:input_type -> ares.v1.GetPurpleTemplateRequest
-	0,  // 55: ares.v1.ControlPlane.Advise:input_type -> ares.v1.AdviseRequest
-	5,  // 56: ares.v1.ControlPlane.GetSettings:input_type -> ares.v1.GetSettingsRequest
-	7,  // 57: ares.v1.ControlPlane.UpdateSettings:input_type -> ares.v1.UpdateSettingsRequest
-	8,  // 58: ares.v1.ControlPlane.TestAIProvider:input_type -> ares.v1.TestAIProviderRequest
-	11, // 59: ares.v1.ControlPlane.GetSetupStatus:input_type -> ares.v1.GetSetupStatusRequest
-	13, // 60: ares.v1.ControlPlane.TestDatabaseConnection:input_type -> ares.v1.TestDatabaseConnectionRequest
-	16, // 61: ares.v1.ControlPlane.CommitSetup:input_type -> ares.v1.CommitSetupRequest
-	19, // 62: ares.v1.ControlPlane.Login:input_type -> ares.v1.LoginRequest
-	21, // 63: ares.v1.ControlPlane.Logout:input_type -> ares.v1.LogoutRequest
-	23, // 64: ares.v1.ControlPlane.CurrentUser:input_type -> ares.v1.CurrentUserRequest
-	24, // 65: ares.v1.ControlPlane.ListUsers:input_type -> ares.v1.ListUsersRequest
-	26, // 66: ares.v1.ControlPlane.CreateUser:input_type -> ares.v1.CreateUserRequest
-	27, // 67: ares.v1.ControlPlane.SetUserRole:input_type -> ares.v1.SetUserRoleRequest
-	28, // 68: ares.v1.ControlPlane.SetUserDisabled:input_type -> ares.v1.SetUserDisabledRequest
-	35, // 69: ares.v1.ControlPlane.ListModules:output_type -> ares.v1.ListModulesResponse
-	29, // 70: ares.v1.ControlPlane.CreateTenant:output_type -> ares.v1.Tenant
-	38, // 71: ares.v1.ControlPlane.ListTenants:output_type -> ares.v1.ListTenantsResponse
-	33, // 72: ares.v1.ControlPlane.CreateEngagement:output_type -> ares.v1.Engagement
-	41, // 73: ares.v1.ControlPlane.ListEngagements:output_type -> ares.v1.ListEngagementsResponse
-	33, // 74: ares.v1.ControlPlane.GetEngagement:output_type -> ares.v1.Engagement
-	33, // 75: ares.v1.ControlPlane.SetScope:output_type -> ares.v1.Engagement
-	33, // 76: ares.v1.ControlPlane.Authorize:output_type -> ares.v1.Engagement
-	33, // 77: ares.v1.ControlPlane.Halt:output_type -> ares.v1.Engagement
-	49, // 78: ares.v1.ControlPlane.DispatchJob:output_type -> ares.v1.DispatchJobResponse
-	51, // 79: ares.v1.ControlPlane.GetJob:output_type -> ares.v1.JobOutcome
-	54, // 80: ares.v1.ControlPlane.ListJobs:output_type -> ares.v1.ListJobsResponse
-	57, // 81: ares.v1.ControlPlane.ListFindings:output_type -> ares.v1.ListFindingsResponse
-	55, // 82: ares.v1.ControlPlane.SetFindingStatus:output_type -> ares.v1.Finding
-	63, // 83: ares.v1.ControlPlane.GetAudit:output_type -> ares.v1.GetAuditResponse
-	62, // 84: ares.v1.ControlPlane.GenerateReport:output_type -> ares.v1.GenerateReportResponse
-	65, // 85: ares.v1.ControlPlane.GetDetectionSummary:output_type -> ares.v1.DetectionSummary
-	65, // 86: ares.v1.ControlPlane.SetDetection:output_type -> ares.v1.DetectionSummary
-	69, // 87: ares.v1.ControlPlane.GetRiskPicture:output_type -> ares.v1.RiskPicture
-	77, // 88: ares.v1.ControlPlane.ListPurpleTemplates:output_type -> ares.v1.ListPurpleTemplatesResponse
-	75, // 89: ares.v1.ControlPlane.GetPurpleTemplate:output_type -> ares.v1.PurpleTemplate
-	1,  // 90: ares.v1.ControlPlane.Advise:output_type -> ares.v1.AdviseResponse
-	4,  // 91: ares.v1.ControlPlane.GetSettings:output_type -> ares.v1.SettingsView
-	4,  // 92: ares.v1.ControlPlane.UpdateSettings:output_type -> ares.v1.SettingsView
-	9,  // 93: ares.v1.ControlPlane.TestAIProvider:output_type -> ares.v1.TestAIProviderResponse
-	12, // 94: ares.v1.ControlPlane.GetSetupStatus:output_type -> ares.v1.SetupStatus
-	14, // 95: ares.v1.ControlPlane.TestDatabaseConnection:output_type -> ares.v1.TestDatabaseConnectionResponse
-	17, // 96: ares.v1.ControlPlane.CommitSetup:output_type -> ares.v1.CommitSetupResponse
-	20, // 97: ares.v1.ControlPlane.Login:output_type -> ares.v1.LoginResponse
-	22, // 98: ares.v1.ControlPlane.Logout:output_type -> ares.v1.LogoutResponse
-	18, // 99: ares.v1.ControlPlane.CurrentUser:output_type -> ares.v1.UserInfo
-	25, // 100: ares.v1.ControlPlane.ListUsers:output_type -> ares.v1.ListUsersResponse
-	18, // 101: ares.v1.ControlPlane.CreateUser:output_type -> ares.v1.UserInfo
-	18, // 102: ares.v1.ControlPlane.SetUserRole:output_type -> ares.v1.UserInfo
-	18, // 103: ares.v1.ControlPlane.SetUserDisabled:output_type -> ares.v1.UserInfo
-	69, // [69:104] is the sub-list for method output_type
-	34, // [34:69] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	52, // 21: ares.v1.JobOutcome.progress:type_name -> ares.v1.JobProgress
+	52, // 22: ares.v1.JobSummary.progress:type_name -> ares.v1.JobProgress
+	54, // 23: ares.v1.ListJobsResponse.jobs:type_name -> ares.v1.JobSummary
+	82, // 24: ares.v1.Finding.data:type_name -> google.protobuf.Struct
+	56, // 25: ares.v1.ListFindingsResponse.findings:type_name -> ares.v1.Finding
+	60, // 26: ares.v1.GetAuditResponse.entries:type_name -> ares.v1.AuditEntry
+	65, // 27: ares.v1.DetectionSummary.techniques:type_name -> ares.v1.TechniqueStatus
+	80, // 28: ares.v1.DetectionSummary.counts:type_name -> ares.v1.DetectionSummary.CountsEntry
+	68, // 29: ares.v1.AttackPath.steps:type_name -> ares.v1.PathStep
+	69, // 30: ares.v1.RiskPicture.paths:type_name -> ares.v1.AttackPath
+	81, // 31: ares.v1.PurpleCoverage.counts:type_name -> ares.v1.PurpleCoverage.CountsEntry
+	73, // 32: ares.v1.PurpleTemplateSummary.coverage:type_name -> ares.v1.PurpleCoverage
+	74, // 33: ares.v1.PurpleTemplate.steps:type_name -> ares.v1.PurpleStep
+	73, // 34: ares.v1.PurpleTemplate.coverage:type_name -> ares.v1.PurpleCoverage
+	75, // 35: ares.v1.ListPurpleTemplatesResponse.templates:type_name -> ares.v1.PurpleTemplateSummary
+	34, // 36: ares.v1.ControlPlane.ListModules:input_type -> ares.v1.ListModulesRequest
+	36, // 37: ares.v1.ControlPlane.CreateTenant:input_type -> ares.v1.CreateTenantRequest
+	37, // 38: ares.v1.ControlPlane.ListTenants:input_type -> ares.v1.ListTenantsRequest
+	39, // 39: ares.v1.ControlPlane.CreateEngagement:input_type -> ares.v1.CreateEngagementRequest
+	40, // 40: ares.v1.ControlPlane.ListEngagements:input_type -> ares.v1.ListEngagementsRequest
+	42, // 41: ares.v1.ControlPlane.GetEngagement:input_type -> ares.v1.GetEngagementRequest
+	43, // 42: ares.v1.ControlPlane.SetScope:input_type -> ares.v1.SetScopeRequest
+	44, // 43: ares.v1.ControlPlane.Authorize:input_type -> ares.v1.AuthorizeRequest
+	45, // 44: ares.v1.ControlPlane.Halt:input_type -> ares.v1.HaltRequest
+	48, // 45: ares.v1.ControlPlane.DispatchJob:input_type -> ares.v1.DispatchJobRequest
+	50, // 46: ares.v1.ControlPlane.GetJob:input_type -> ares.v1.GetJobRequest
+	53, // 47: ares.v1.ControlPlane.ListJobs:input_type -> ares.v1.ListJobsRequest
+	57, // 48: ares.v1.ControlPlane.ListFindings:input_type -> ares.v1.ListFindingsRequest
+	59, // 49: ares.v1.ControlPlane.SetFindingStatus:input_type -> ares.v1.SetFindingStatusRequest
+	61, // 50: ares.v1.ControlPlane.GetAudit:input_type -> ares.v1.GetAuditRequest
+	62, // 51: ares.v1.ControlPlane.GenerateReport:input_type -> ares.v1.GenerateReportRequest
+	67, // 52: ares.v1.ControlPlane.GetDetectionSummary:input_type -> ares.v1.GetDetectionSummaryRequest
+	72, // 53: ares.v1.ControlPlane.SetDetection:input_type -> ares.v1.SetDetectionRequest
+	71, // 54: ares.v1.ControlPlane.GetRiskPicture:input_type -> ares.v1.GetRiskPictureRequest
+	77, // 55: ares.v1.ControlPlane.ListPurpleTemplates:input_type -> ares.v1.ListPurpleTemplatesRequest
+	79, // 56: ares.v1.ControlPlane.GetPurpleTemplate:input_type -> ares.v1.GetPurpleTemplateRequest
+	0,  // 57: ares.v1.ControlPlane.Advise:input_type -> ares.v1.AdviseRequest
+	5,  // 58: ares.v1.ControlPlane.GetSettings:input_type -> ares.v1.GetSettingsRequest
+	7,  // 59: ares.v1.ControlPlane.UpdateSettings:input_type -> ares.v1.UpdateSettingsRequest
+	8,  // 60: ares.v1.ControlPlane.TestAIProvider:input_type -> ares.v1.TestAIProviderRequest
+	11, // 61: ares.v1.ControlPlane.GetSetupStatus:input_type -> ares.v1.GetSetupStatusRequest
+	13, // 62: ares.v1.ControlPlane.TestDatabaseConnection:input_type -> ares.v1.TestDatabaseConnectionRequest
+	16, // 63: ares.v1.ControlPlane.CommitSetup:input_type -> ares.v1.CommitSetupRequest
+	19, // 64: ares.v1.ControlPlane.Login:input_type -> ares.v1.LoginRequest
+	21, // 65: ares.v1.ControlPlane.Logout:input_type -> ares.v1.LogoutRequest
+	23, // 66: ares.v1.ControlPlane.CurrentUser:input_type -> ares.v1.CurrentUserRequest
+	24, // 67: ares.v1.ControlPlane.ListUsers:input_type -> ares.v1.ListUsersRequest
+	26, // 68: ares.v1.ControlPlane.CreateUser:input_type -> ares.v1.CreateUserRequest
+	27, // 69: ares.v1.ControlPlane.SetUserRole:input_type -> ares.v1.SetUserRoleRequest
+	28, // 70: ares.v1.ControlPlane.SetUserDisabled:input_type -> ares.v1.SetUserDisabledRequest
+	35, // 71: ares.v1.ControlPlane.ListModules:output_type -> ares.v1.ListModulesResponse
+	29, // 72: ares.v1.ControlPlane.CreateTenant:output_type -> ares.v1.Tenant
+	38, // 73: ares.v1.ControlPlane.ListTenants:output_type -> ares.v1.ListTenantsResponse
+	33, // 74: ares.v1.ControlPlane.CreateEngagement:output_type -> ares.v1.Engagement
+	41, // 75: ares.v1.ControlPlane.ListEngagements:output_type -> ares.v1.ListEngagementsResponse
+	33, // 76: ares.v1.ControlPlane.GetEngagement:output_type -> ares.v1.Engagement
+	33, // 77: ares.v1.ControlPlane.SetScope:output_type -> ares.v1.Engagement
+	33, // 78: ares.v1.ControlPlane.Authorize:output_type -> ares.v1.Engagement
+	33, // 79: ares.v1.ControlPlane.Halt:output_type -> ares.v1.Engagement
+	49, // 80: ares.v1.ControlPlane.DispatchJob:output_type -> ares.v1.DispatchJobResponse
+	51, // 81: ares.v1.ControlPlane.GetJob:output_type -> ares.v1.JobOutcome
+	55, // 82: ares.v1.ControlPlane.ListJobs:output_type -> ares.v1.ListJobsResponse
+	58, // 83: ares.v1.ControlPlane.ListFindings:output_type -> ares.v1.ListFindingsResponse
+	56, // 84: ares.v1.ControlPlane.SetFindingStatus:output_type -> ares.v1.Finding
+	64, // 85: ares.v1.ControlPlane.GetAudit:output_type -> ares.v1.GetAuditResponse
+	63, // 86: ares.v1.ControlPlane.GenerateReport:output_type -> ares.v1.GenerateReportResponse
+	66, // 87: ares.v1.ControlPlane.GetDetectionSummary:output_type -> ares.v1.DetectionSummary
+	66, // 88: ares.v1.ControlPlane.SetDetection:output_type -> ares.v1.DetectionSummary
+	70, // 89: ares.v1.ControlPlane.GetRiskPicture:output_type -> ares.v1.RiskPicture
+	78, // 90: ares.v1.ControlPlane.ListPurpleTemplates:output_type -> ares.v1.ListPurpleTemplatesResponse
+	76, // 91: ares.v1.ControlPlane.GetPurpleTemplate:output_type -> ares.v1.PurpleTemplate
+	1,  // 92: ares.v1.ControlPlane.Advise:output_type -> ares.v1.AdviseResponse
+	4,  // 93: ares.v1.ControlPlane.GetSettings:output_type -> ares.v1.SettingsView
+	4,  // 94: ares.v1.ControlPlane.UpdateSettings:output_type -> ares.v1.SettingsView
+	9,  // 95: ares.v1.ControlPlane.TestAIProvider:output_type -> ares.v1.TestAIProviderResponse
+	12, // 96: ares.v1.ControlPlane.GetSetupStatus:output_type -> ares.v1.SetupStatus
+	14, // 97: ares.v1.ControlPlane.TestDatabaseConnection:output_type -> ares.v1.TestDatabaseConnectionResponse
+	17, // 98: ares.v1.ControlPlane.CommitSetup:output_type -> ares.v1.CommitSetupResponse
+	20, // 99: ares.v1.ControlPlane.Login:output_type -> ares.v1.LoginResponse
+	22, // 100: ares.v1.ControlPlane.Logout:output_type -> ares.v1.LogoutResponse
+	18, // 101: ares.v1.ControlPlane.CurrentUser:output_type -> ares.v1.UserInfo
+	25, // 102: ares.v1.ControlPlane.ListUsers:output_type -> ares.v1.ListUsersResponse
+	18, // 103: ares.v1.ControlPlane.CreateUser:output_type -> ares.v1.UserInfo
+	18, // 104: ares.v1.ControlPlane.SetUserRole:output_type -> ares.v1.UserInfo
+	18, // 105: ares.v1.ControlPlane.SetUserDisabled:output_type -> ares.v1.UserInfo
+	71, // [71:106] is the sub-list for method output_type
+	36, // [36:71] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_ares_v1_ares_proto_init() }
@@ -6050,7 +6221,7 @@ func file_ares_v1_ares_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ares_v1_ares_proto_rawDesc), len(file_ares_v1_ares_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   81,
+			NumMessages:   82,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

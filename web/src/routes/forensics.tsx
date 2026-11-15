@@ -35,7 +35,8 @@ import {
 import { useStartTest } from "../features/engagement/startTest.ts";
 import { FindingsTable } from "../features/findings/FindingsTable.tsx";
 import { EngagementPicker } from "../features/workspace/EngagementPicker.tsx";
-import { useEngagements, useFindings, useJobs } from "../features/workspace/data.ts";
+import { useEngagements, useFindings, useJobs, type Job } from "../features/workspace/data.ts";
+import { timeLeft } from "../lib/timeLeft.ts";
 
 const route = getRouteApi("/forensics");
 
@@ -353,8 +354,8 @@ function Workbench({ id, status }: { id: string; status: string }) {
                 Add evidence
               </Button>
               {running.length > 0 && (
-                <Text size="sm" c="dimmed">
-                  Working on it…
+                <Text size="sm" c="dimmed" aria-live="polite">
+                  {workingLabel(running)}
                 </Text>
               )}
             </Group>
@@ -737,4 +738,14 @@ function WordPressParts({ data, bundle }: { data: JsonObject; bundle: string }) 
       )}
     </Section>
   );
+}
+
+// What the running checks have left, by the one that will finish last. A
+// check with no estimate yet keeps the plain "Working on it…".
+function workingLabel(running: Job[]): string {
+  const est = running.map((j) => j.progress);
+  if (est.some((p) => !p || p.state !== "estimate")) return "Working on it…";
+  const last = est.reduce((a, b) => (b!.remainingHighSeconds > a!.remainingHighSeconds ? b : a));
+  const left = timeLeft(last);
+  return left ? `Working on it. ${left.short}${left.by ? `, done around ${left.by}` : ""}.` : "Working on it…";
 }
