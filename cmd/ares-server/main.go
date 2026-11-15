@@ -140,6 +140,19 @@ func main() {
 	// Authentication: built-in email + password with server-side sessions,
 	// available whether or not setup has run (so the super-admin can log in right
 	// after setup).
+	//
+	// Sessions and accounts are read through a seconds-long in-process cache:
+	// every request authenticates, and against Postgres that was a round trip
+	// (two with the per-request account check) before any handler ran. Writes
+	// through the service evict at once, so logout, disable and role changes
+	// still apply on the next request; the TTL only bounds how long a change
+	// made by another server process can take to be seen.
+	// ARES_AUTH_CACHE_TTL sets it (e.g. "5s"); "0" or "off" disables the cache.
+	rawSessions := sessionStore
+	if ttl, on := authCacheTTL(os.Getenv("ARES_AUTH_CACHE_TTL")); on {
+		userStore = auth.CachedUsers(userStore, ttl)
+		sessionStore = auth.CachedSessions(sessionStore, ttl)
+	}
 	authSvc := auth.NewService(userStore, sessionStore)
 
 	// The in-app settings store needs the master encryption key to seal and open
@@ -165,6 +178,11 @@ func main() {
 	defer stop()
 
 	go pool.Run(ctx, q.C())
+
+	// Reclaim sessions nobody will present again (they were never deleted).
+	if sw, ok := rawSessions.(auth.ExpiredSweeper); ok {
+		go auth.SweepExpiredSessions(ctx, sw, 15*time.Minute)
+	}
 
 	// Opt-in profiling on its own listener (keep it on loopback): set
 	// ARES_PPROF_ADDR=127.0.0.1:6060 and use `go tool pprof`. It is never mounted
@@ -345,3 +363,20 @@ func newFastGzipWriter() connect.Compressor {
 
 // newGzipReader decompresses gzip request bodies (as connect's default does).
 func newGzipReader() connect.Decompressor { return &gzip.Reader{} }
+
+// authCacheTTL parses ARES_AUTH_CACHE_TTL: empty means the default, "0" or
+// "off" turns the cache off, anything else is a Go duration.
+func authCacheTTL(v string) (time.Duration, bool) {
+	switch v = strings.TrimSpace(strings.ToLower(v)); v {
+	case "":
+		return auth.DefaultCacheTTL, true
+	case "0", "off", "none":
+		return 0, false
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		log.Printf("ignoring invalid ARES_AUTH_CACHE_TTL=%q", v)
+		return auth.DefaultCacheTTL, true
+	}
+	return d, true
+}

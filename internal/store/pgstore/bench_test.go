@@ -51,25 +51,36 @@ func BenchmarkPGSaveGrowingAudit(b *testing.B) {
 }
 
 // BenchmarkPGAuthenticate is the cost every authenticated RPC pays before its
-// handler runs: hash the bearer token and load the session row.
+// handler runs: hash the bearer token and load the session row, uncached and
+// behind the in-process auth cache the server wires by default.
 func BenchmarkPGAuthenticate(b *testing.B) {
-	s := freshStore(b)
-	svc := auth.NewService(s.Users(), s.Sessions())
-	if _, err := svc.CreateUser("", "bench@example.test", "Bench", "correct horse battery staple", auth.RoleAdmin); err != nil {
-		b.Fatal(err)
-	}
-	sess, _, err := svc.Login("bench@example.test", "correct horse battery staple")
-	if err != nil {
-		b.Fatal(err)
-	}
-	b.ReportAllocs()
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			if _, err := svc.Authenticate(sess.Token); err != nil {
-				b.Error(err)
-				return
+	for _, cached := range []bool{false, true} {
+		b.Run(map[bool]string{false: "direct", true: "cached"}[cached], func(b *testing.B) {
+			s := freshStore(b)
+			var users auth.UserStore = s.Users()
+			var sessions auth.SessionStore = s.Sessions()
+			if cached {
+				users = auth.CachedUsers(users, auth.DefaultCacheTTL)
+				sessions = auth.CachedSessions(sessions, auth.DefaultCacheTTL)
 			}
-		}
-	})
+			svc := auth.NewService(users, sessions)
+			if _, err := svc.CreateUser("", "bench@example.test", "Bench", "correct horse battery staple", auth.RoleAdmin); err != nil {
+				b.Fatal(err)
+			}
+			sess, _, err := svc.Login("bench@example.test", "correct horse battery staple")
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					if _, err := svc.Authenticate(sess.Token); err != nil {
+						b.Error(err)
+						return
+					}
+				}
+			})
+		})
+	}
 }

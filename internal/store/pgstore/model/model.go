@@ -113,7 +113,13 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-func (s *Session) Schema(tb *storm.Table) { tb.PrimaryKey(&s.TokenHash) }
+// Sessions are looked up by token hash; user_id serves revoking every session
+// of an account, expires_at the periodic sweep of expired sessions.
+func (s *Session) Schema(tb *storm.Table) {
+	tb.PrimaryKey(&s.TokenHash)
+	tb.Index(&s.UserID)
+	tb.Index(&s.ExpiresAt)
+}
 
 // Setting is one workspace's settings. Secrets are stored already sealed
 // (ciphertext) in the jsonb payload, so the database never holds a plaintext
