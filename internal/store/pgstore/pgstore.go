@@ -25,7 +25,10 @@ package pgstore
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -37,6 +40,7 @@ import (
 
 	"github.com/gsoultan/ares-server/internal/audit"
 	"github.com/gsoultan/ares-server/internal/engagement"
+	auditpkg "github.com/gsoultan/ares-server/internal/store/pgstore/gen/auditentry"
 	engagementpkg "github.com/gsoultan/ares-server/internal/store/pgstore/gen/engagement"
 	tenantpkg "github.com/gsoultan/ares-server/internal/store/pgstore/gen/tenant"
 	engmodel "github.com/gsoultan/ares-server/internal/store/pgstore/model"
@@ -49,10 +53,31 @@ import (
 type Store struct {
 	pool    *pgxpool.Pool
 	ex      runtime.Executor
+	db      pgxdrv.Pool
 	mu      sync.Mutex
 	m       map[string]*engagement.Engagement
 	tenants map[string]*tenant.Tenant
+	saved   map[string]*savedState // what is already in Postgres, per engagement
 }
+
+// savedState is what Save last wrote for one engagement: how many audit
+// entries are persisted and a hash of the header document. Save then writes
+// only the entries after that point, and the header only when it changed. Its
+// mutex serializes Saves of the same engagement (the worker and an API call can
+// race), so two Saves never write the same entries.
+type savedState struct {
+	mu         sync.Mutex
+	auditN     int
+	headerHash [32]byte
+}
+
+// pageSize is the generated queries' default LIMIT; reads that must see every
+// row page with a keyset cursor until a short page.
+const pageSize = 1000
+
+// auditCopyThreshold is the number of new audit entries above which Save bulk
+// loads them with COPY inside a transaction instead of one pipelined batch.
+const auditCopyThreshold = 64
 
 var _ engagement.Store = (*Store)(nil)
 
@@ -88,8 +113,10 @@ func Open(dsn string) (*Store, error) {
 	s := &Store{
 		pool:    pool,
 		ex:      pgxdrv.Pool{P: pool},
+		db:      pgxdrv.Pool{P: pool},
 		m:       make(map[string]*engagement.Engagement),
 		tenants: make(map[string]*tenant.Tenant),
+		saved:   make(map[string]*savedState),
 	}
 	if err := s.load(ctx); err != nil {
 		pool.Close()
@@ -109,37 +136,113 @@ func Open(dsn string) (*Store, error) {
 }
 
 func (s *Store) load(ctx context.Context) error {
-	trows, err := tenantpkg.New().All(ctx, s.ex, nil)
-	if err != nil {
-		return fmt.Errorf("pgstore: load tenants: %w", err)
-	}
-	for _, r := range trows {
-		s.tenants[r.ID] = &tenant.Tenant{ID: r.ID, Name: r.Name, CreatedAt: r.CreatedAt}
+	// Every read pages: the generated queries LIMIT 1000 by default, and a
+	// plain All would silently drop every row after the first page.
+	for q := tenantpkg.New(); ; {
+		trows, err := q.All(ctx, s.ex, nil)
+		if err != nil {
+			return fmt.Errorf("pgstore: load tenants: %w", err)
+		}
+		for _, r := range trows {
+			s.tenants[r.ID] = &tenant.Tenant{ID: r.ID, Name: r.Name, CreatedAt: r.CreatedAt}
+		}
+		if len(trows) < pageSize {
+			break
+		}
+		q = tenantpkg.New().After(trows[len(trows)-1])
 	}
 
-	erows, err := engagementpkg.New().All(ctx, s.ex, nil)
+	trails, err := s.loadAudit(ctx)
 	if err != nil {
-		return fmt.Errorf("pgstore: load engagements: %w", err)
+		return err
 	}
-	for _, r := range erows {
-		var doc engmodel.EngagementDoc
-		if err := r.Data.Unmarshal(&doc); err != nil {
-			return fmt.Errorf("pgstore: decode engagement %s: %w", r.ID, err)
-		}
-		sc, err := scope.Restore(doc.Scope)
+
+	for q := engagementpkg.New(); ; {
+		erows, err := q.All(ctx, s.ex, nil)
 		if err != nil {
-			return fmt.Errorf("pgstore: restore scope for %s: %w", r.ID, err)
+			return fmt.Errorf("pgstore: load engagements: %w", err)
 		}
-		log := audit.Load(doc.Audit)
-		if err := log.Verify(); err != nil {
-			return fmt.Errorf("pgstore: audit trail for %s failed verification at rest: %w", r.ID, err)
+		for _, r := range erows {
+			if err := s.loadEngagement(ctx, r, trails[r.ID]); err != nil {
+				return err
+			}
 		}
-		tenantID := r.TenantID
-		if tenantID == "" {
-			tenantID = tenant.DefaultID
+		if len(erows) < pageSize {
+			break
 		}
-		eng := engagement.Restore(r.ID, tenantID, r.Name, engagement.Status(doc.Status), doc.Authorization, r.CreatedAt, sc, log, doc.Detection)
-		s.m[r.ID] = eng
+		q = engagementpkg.New().After(erows[len(erows)-1])
+	}
+	return nil
+}
+
+// loadAudit reads every audit entry, grouped by engagement in seq order.
+func (s *Store) loadAudit(ctx context.Context) (map[string][]audit.Entry, error) {
+	trails := map[string][]audit.Entry{}
+	for q := auditpkg.New(); ; {
+		rows, err := q.All(ctx, s.ex, nil)
+		if err != nil {
+			return nil, fmt.Errorf("pgstore: load audit trail: %w", err)
+		}
+		for _, r := range rows {
+			var e audit.Entry
+			if err := r.Entry.Unmarshal(&e); err != nil {
+				return nil, fmt.Errorf("pgstore: decode audit entry %s/%d: %w", r.EngagementID, r.Seq, err)
+			}
+			trails[r.EngagementID] = append(trails[r.EngagementID], e)
+		}
+		if len(rows) < pageSize {
+			break
+		}
+		q = auditpkg.New().After(rows[len(rows)-1])
+	}
+	for id, t := range trails {
+		sort.Slice(t, func(i, j int) bool { return t[i].Seq < t[j].Seq })
+		trails[id] = t
+	}
+	return trails, nil
+}
+
+// loadEngagement restores one engagement from its header row and audit rows.
+// An engagement written before the trail had its own table still carries it in
+// the header; it is moved out here, once, in one transaction.
+func (s *Store) loadEngagement(ctx context.Context, r engagementpkg.Row, trail []audit.Entry) error {
+	var doc engmodel.EngagementDoc
+	if err := r.Data.Unmarshal(&doc); err != nil {
+		return fmt.Errorf("pgstore: decode engagement %s: %w", r.ID, err)
+	}
+	legacy := len(doc.Audit) > 0
+	if legacy && len(trail) == 0 {
+		trail = doc.Audit
+	}
+	sc, err := scope.Restore(doc.Scope)
+	if err != nil {
+		return fmt.Errorf("pgstore: restore scope for %s: %w", r.ID, err)
+	}
+	log := audit.Load(trail)
+	if err := log.Verify(); err != nil {
+		return fmt.Errorf("pgstore: audit trail for %s failed verification at rest: %w", r.ID, err)
+	}
+	tenantID := r.TenantID
+	if tenantID == "" {
+		tenantID = tenant.DefaultID
+	}
+	eng := engagement.Restore(r.ID, tenantID, r.Name, engagement.Status(doc.Status), doc.Authorization, r.CreatedAt, sc, log, doc.Detection)
+	s.m[r.ID] = eng
+
+	st := &savedState{auditN: len(trail)}
+	s.saved[r.ID] = st
+	if legacy {
+		// Write the trail as rows and the header without it, atomically. The
+		// saved state starts at zero entries and an unknown header, so this is
+		// just a Save.
+		st.auditN = 0
+		if err := s.Save(eng); err != nil {
+			return fmt.Errorf("pgstore: migrate audit trail of %s: %w", r.ID, err)
+		}
+		return nil
+	}
+	if raw, err := headerJSON(eng); err == nil {
+		st.headerHash = sha256.Sum256(raw)
 	}
 	return nil
 }
@@ -251,32 +354,130 @@ func (s *Store) List(tenantID string) []*engagement.Engagement {
 // Save flushes the current state of an engagement to Postgres. Callers invoke it
 // after mutating an engagement (scope edits, authorization, the kill switch,
 // audit appends).
+//
+// The audit trail is append-only, so Save writes only the entries added since
+// the last Save, as their own rows, and rewrites the small header document
+// (status, authorization, scope, detection) only when it changed. Both go in
+// one pipelined batch, which Postgres runs as one implicit transaction; a large
+// backlog of entries is bulk loaded with COPY inside an explicit transaction.
+// The cost of a Save is therefore proportional to what changed, not to the
+// length of the trail, and no dead copies of the trail pile up in the table.
 func (s *Store) Save(e *engagement.Engagement) error {
 	s.mu.Lock()
 	s.m[e.ID] = e
+	st, ok := s.saved[e.ID]
+	if !ok {
+		st = &savedState{}
+		s.saved[e.ID] = st
+	}
 	s.mu.Unlock()
 
-	doc := engmodel.EngagementDoc{
-		Status:        string(e.Status),
-		Authorization: e.Authorization,
-		Scope:         e.Scope.Snapshot(),
-		Audit:         e.Audit.Entries(),
-		Detection:     e.Detection,
-	}
-	raw, err := marshalJSON(doc)
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	raw, err := headerJSON(e)
 	if err != nil {
 		return fmt.Errorf("pgstore: encode %s: %w", e.ID, err)
 	}
-	n := engagementpkg.Create()
-	n.SetID(e.ID)
-	n.SetTenantID(e.TenantID)
-	n.SetName(e.Name)
-	n.SetCreatedAt(e.CreatedAt)
-	n.SetData(raw)
-	if _, err := n.OnConflictID().Insert(context.Background(), s.ex); err != nil {
+	hash := sha256.Sum256(raw)
+	headerChanged := hash != st.headerHash
+
+	fresh, total := e.Audit.Since(st.auditN)
+	if total < st.auditN {
+		// The trail never shrinks; a shorter one is a different log object.
+		return fmt.Errorf("pgstore: save %s: audit trail shrank from %d to %d entries", e.ID, st.auditN, total)
+	}
+	if !headerChanged && len(fresh) == 0 {
+		return nil
+	}
+
+	ctx := context.Background()
+	var header *engagementpkg.Ins
+	if headerChanged {
+		n := engagementpkg.Create()
+		n.SetID(e.ID)
+		n.SetTenantID(e.TenantID)
+		n.SetName(e.Name)
+		n.SetCreatedAt(e.CreatedAt)
+		n.SetData(runtime.JSON(raw))
+		header = n.OnConflictID()
+	}
+	if len(fresh) > auditCopyThreshold {
+		err = s.saveBulk(ctx, e.ID, header, fresh)
+	} else {
+		err = s.saveBatch(ctx, e.ID, header, fresh)
+	}
+	if err != nil {
 		return fmt.Errorf("pgstore: save %s: %w", e.ID, err)
 	}
+	st.auditN = total
+	st.headerHash = hash
 	return nil
+}
+
+// saveBatch writes the header (when given) and a few audit rows in one round trip.
+func (s *Store) saveBatch(ctx context.Context, id string, header *engagementpkg.Ins, fresh []audit.Entry) error {
+	ops := make([]runtime.BatchOp, 0, len(fresh)+1)
+	if header != nil {
+		op, err := header.Op()
+		if err != nil {
+			return err
+		}
+		ops = append(ops, op)
+	}
+	for _, en := range fresh {
+		row, err := auditRow(id, en)
+		if err != nil {
+			return err
+		}
+		ops = append(ops, auditpkg.InsertOp(row))
+	}
+	return s.ex.Batch(ctx, ops, nil)
+}
+
+// saveBulk writes the header (when given) and many audit rows in one transaction,
+// loading the rows with COPY.
+func (s *Store) saveBulk(ctx context.Context, id string, header *engagementpkg.Ins, fresh []audit.Entry) error {
+	rows := make([]auditpkg.Row, 0, len(fresh))
+	for _, en := range fresh {
+		row, err := auditRow(id, en)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, row)
+	}
+	tx, err := s.db.StartTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after Commit
+	if header != nil {
+		if _, err := header.Insert(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if _, err := auditpkg.InsertAll(ctx, tx, rows); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func auditRow(id string, en audit.Entry) (auditpkg.Row, error) {
+	raw, err := marshalJSON(en)
+	if err != nil {
+		return auditpkg.Row{}, err
+	}
+	return auditpkg.Row{EngagementID: id, Seq: int64(en.Seq), Entry: raw}, nil
+}
+
+// headerJSON encodes everything about an engagement except its audit trail.
+func headerJSON(e *engagement.Engagement) ([]byte, error) {
+	return json.Marshal(engmodel.EngagementDoc{
+		Status:        string(e.Status),
+		Authorization: e.Authorization,
+		Scope:         e.Scope.Snapshot(),
+		Detection:     e.Detection,
+	})
 }
 
 // Close releases the connection pool.

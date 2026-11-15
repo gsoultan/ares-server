@@ -30,7 +30,7 @@ import (
 
 // All returns every model, for storm.Build and storm generate.
 func All() []any {
-	return []any{&Tenant{}, &Engagement{}, &User{}, &Session{}, &Setting{}, &SetupConfig{}}
+	return []any{&Tenant{}, &Engagement{}, &AuditEntry{}, &User{}, &Session{}, &Setting{}, &SetupConfig{}}
 }
 
 // Tenant is a client workspace.
@@ -45,11 +45,14 @@ func (t *Tenant) Schema(tb *storm.Table) { tb.PrimaryKey(&t.ID) }
 // EngagementDoc is the jsonb payload of an engagement: the parts whose shape is
 // nested and whose timestamps must survive at nanosecond precision.
 type EngagementDoc struct {
-	Status        string                      `json:"status"`
-	Authorization *engagement.Authorization   `json:"authorization,omitempty"`
-	Scope         scope.Snapshot              `json:"scope"`
-	Audit         []audit.Entry               `json:"audit"`
-	Detection     map[string]detection.Record `json:"detection,omitempty"`
+	Status        string                    `json:"status"`
+	Authorization *engagement.Authorization `json:"authorization,omitempty"`
+	Scope         scope.Snapshot            `json:"scope"`
+	// Audit is only read, from engagements written before the trail moved to
+	// its own append-only table (AuditEntry); Open migrates it out and new
+	// headers never carry it.
+	Audit     []audit.Entry               `json:"audit,omitempty"`
+	Detection map[string]detection.Record `json:"detection,omitempty"`
 }
 
 // Engagement is one assessment. Data is a jsonb document (see EngagementDoc).
@@ -65,6 +68,18 @@ func (e *Engagement) Schema(tb *storm.Table) {
 	tb.PrimaryKey(&e.ID)
 	tb.Index(&e.TenantID)
 }
+
+// AuditEntry is one entry of an engagement's hash-chained audit trail, stored
+// as its own append-only row so saving an engagement writes only the entries
+// added since the last save instead of rewriting the whole trail. Rows are
+// never updated or deleted; the chain is verified on load as before.
+type AuditEntry struct {
+	EngagementID string
+	Seq          int64
+	Entry        audit.Entry
+}
+
+func (a *AuditEntry) Schema(tb *storm.Table) { tb.PrimaryKey(&a.EngagementID, &a.Seq) }
 
 // User is an account. Email carries a unique constraint so the database enforces
 // one account per email; the password is stored only as its PBKDF2 hash.

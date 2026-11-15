@@ -8,6 +8,7 @@ require (
 	github.com/gsoultan/ares v0.0.0-20261115103741-feca301f6ad3
 	github.com/gsoultan/storm v1.12.2
 	github.com/jackc/pgx/v5 v5.13.0
+	go.etcd.io/bbolt v1.3.4
 	golang.org/x/net v0.62.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -26,7 +27,6 @@ require (
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/stangelandcl/ppmd v0.1.1 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	go.etcd.io/bbolt v1.3.4 // indirect
 	go4.org v0.0.0-20260112195520-a5071408f32f // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

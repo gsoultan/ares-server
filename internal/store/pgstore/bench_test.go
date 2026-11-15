@@ -43,7 +43,7 @@ func BenchmarkPGSaveGrowingAudit(b *testing.B) {
 			}
 			b.StopTimer()
 			var size int64
-			if err := s.pool.QueryRow(context.Background(), `SELECT pg_total_relation_size('engagements')`).Scan(&size); err == nil {
+			if err := s.pool.QueryRow(context.Background(), `SELECT pg_total_relation_size('engagements') + coalesce(pg_total_relation_size(to_regclass('audit_entries')), 0)`).Scan(&size); err == nil {
 				b.ReportMetric(float64(size)/(1<<20), "tableMiB")
 			}
 		})

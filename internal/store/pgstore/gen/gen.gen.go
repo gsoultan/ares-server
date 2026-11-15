@@ -17,12 +17,13 @@ import (
 // runtime code inspects a schema and no constraint has to be deferred for
 // a graph write to succeed.
 var FlushOrder = map[string]int{
-	"engagements":   0,
-	"sessions":      1,
-	"settings":      2,
-	"setup_configs": 3,
-	"tenants":       4,
-	"users":         5,
+	"audit_entries": 0,
+	"engagements":   1,
+	"sessions":      2,
+	"settings":      3,
+	"setup_configs": 4,
+	"tenants":       5,
+	"users":         6,
 }
 
 // NewUnit stages writes across this context and flushes them in foreign-key

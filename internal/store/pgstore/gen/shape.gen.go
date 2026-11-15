@@ -8,6 +8,17 @@ import (
 	m0 "github.com/gsoultan/ares-server/internal/store/pgstore/model"
 )
 
+// _assertAuditEntryShape fails to compile if m0.AuditEntry gains, loses, renames or
+// reorders a field. Regenerate: `storm generate`.
+func _assertAuditEntryShape(m m0.AuditEntry) {
+	type shape m0.AuditEntry
+	_ = shape{
+		m.EngagementID,
+		m.Seq,
+		m.Entry,
+	}
+}
+
 // _assertEngagementShape fails to compile if m0.Engagement gains, loses, renames or
 // reorders a field. Regenerate: `storm generate`.
 func _assertEngagementShape(m m0.Engagement) {
