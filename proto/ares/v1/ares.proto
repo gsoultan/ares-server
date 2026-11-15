@@ -3,6 +3,7 @@ syntax = "proto3";
 package ares.v1;
 
 import "google/protobuf/struct.proto";
+import "ares/v1/agent.proto";
 
 option go_package = "github.com/gsoultan/ares-server/internal/gen/ares/v1;aresv1";
 
@@ -75,6 +76,27 @@ service ControlPlane {
   rpc CreateUser(CreateUserRequest) returns (UserInfo);
   rpc SetUserRole(SetUserRoleRequest) returns (UserInfo);
   rpc SetUserDisabled(SetUserDisabledRequest) returns (UserInfo);
+
+  // Agent management (the engagement's "Agents" view). An agent is a transparent,
+  // authorized component deployed inside a target's network/host; these operator
+  // calls mint and manage its install keys and the agents themselves. The agent
+  // itself speaks the separate AgentService (agent.proto). See
+  // ares-design/agent-design.md and agent-prd.md.
+  //
+  // MintAgentKey records the required host-owner permission and creates a
+  // one-time install key scoped to the engagement with a capability allow-list.
+  rpc MintAgentKey(MintAgentKeyRequest) returns (MintAgentKeyResponse);
+  // CancelAgentKey withdraws an unused install key.
+  rpc CancelAgentKey(CancelAgentKeyRequest) returns (CancelAgentKeyResponse);
+  // ListAgentKeys lists the engagement's unused install keys.
+  rpc ListAgentKeys(ListAgentKeysRequest) returns (ListAgentKeysResponse);
+  // ListAgents lists the engagement's agents with status, host facts, consent and
+  // capability allow-list.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc GetAgent(GetAgentRequest) returns (AgentView);
+  // RemoveAgent revokes an agent immediately; it self-uninstalls on next contact.
+  // Findings it already sent are kept.
+  rpc RemoveAgent(RemoveAgentRequest) returns (RemoveAgentResponse);
 }
 
 // AdviseRequest asks the optional AI advisor to analyze engagement data.
@@ -666,3 +688,81 @@ message GetPurpleTemplateRequest {
   string template_id = 2;
   string tenant_id = 3;
 }
+
+// ---- Agent management (operator-facing) ------------------------------------
+// Consent and HostFacts are defined in agent.proto (same ares.v1 package).
+
+enum AgentStatus {
+  AGENT_STATUS_UNSPECIFIED = 0;
+  AGENT_STATUS_CONNECTED = 1;      // healthy, idle
+  AGENT_STATUS_RUNNING_CHECK = 2;  // a capability is in flight
+  AGENT_STATUS_NOT_HEARD_FROM = 3; // missed the heartbeat window
+  AGENT_STATUS_REMOVED = 4;        // revoked / removed
+}
+
+message MintAgentKeyRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  // The capability allow-list for agents enrolled with this key. mitmexposure is
+  // off unless explicitly included.
+  repeated string capabilities = 3;
+  // Required host-owner permission record.
+  Consent consent = 4;
+}
+message MintAgentKeyResponse {
+  string key_id = 1;
+  // The one-time install key, returned once. Put it in the install command.
+  string install_key = 2;
+  string expires_at = 3; // RFC3339
+}
+
+message CancelAgentKeyRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string key_id = 3;
+}
+message CancelAgentKeyResponse { bool ok = 1; }
+
+message ListAgentKeysRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+}
+message AgentKeyView {
+  string key_id = 1;
+  repeated string capabilities = 2;
+  Consent consent = 3;
+  string created_at = 4; // RFC3339
+  string expires_at = 5; // RFC3339
+}
+message ListAgentKeysResponse { repeated AgentKeyView keys = 1; }
+
+message ListAgentsRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+}
+message AgentView {
+  string id = 1;
+  string tenant_id = 2;
+  string engagement_id = 3;
+  AgentStatus status = 4;
+  HostFacts host = 5;
+  repeated string capabilities = 6;
+  Consent consent = 7;
+  string current_capability = 8; // set when status is RUNNING_CHECK
+  string enrolled_at = 9;        // RFC3339
+  string last_seen = 10;         // RFC3339
+}
+message ListAgentsResponse { repeated AgentView agents = 1; }
+
+message GetAgentRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+}
+
+message RemoveAgentRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+}
+message RemoveAgentResponse { bool ok = 1; }

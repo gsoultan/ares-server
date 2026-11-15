@@ -127,6 +127,22 @@ const (
 	// ControlPlaneSetUserDisabledProcedure is the fully-qualified name of the ControlPlane's
 	// SetUserDisabled RPC.
 	ControlPlaneSetUserDisabledProcedure = "/ares.v1.ControlPlane/SetUserDisabled"
+	// ControlPlaneMintAgentKeyProcedure is the fully-qualified name of the ControlPlane's MintAgentKey
+	// RPC.
+	ControlPlaneMintAgentKeyProcedure = "/ares.v1.ControlPlane/MintAgentKey"
+	// ControlPlaneCancelAgentKeyProcedure is the fully-qualified name of the ControlPlane's
+	// CancelAgentKey RPC.
+	ControlPlaneCancelAgentKeyProcedure = "/ares.v1.ControlPlane/CancelAgentKey"
+	// ControlPlaneListAgentKeysProcedure is the fully-qualified name of the ControlPlane's
+	// ListAgentKeys RPC.
+	ControlPlaneListAgentKeysProcedure = "/ares.v1.ControlPlane/ListAgentKeys"
+	// ControlPlaneListAgentsProcedure is the fully-qualified name of the ControlPlane's ListAgents RPC.
+	ControlPlaneListAgentsProcedure = "/ares.v1.ControlPlane/ListAgents"
+	// ControlPlaneGetAgentProcedure is the fully-qualified name of the ControlPlane's GetAgent RPC.
+	ControlPlaneGetAgentProcedure = "/ares.v1.ControlPlane/GetAgent"
+	// ControlPlaneRemoveAgentProcedure is the fully-qualified name of the ControlPlane's RemoveAgent
+	// RPC.
+	ControlPlaneRemoveAgentProcedure = "/ares.v1.ControlPlane/RemoveAgent"
 )
 
 // ControlPlaneClient is a client for the ares.v1.ControlPlane service.
@@ -192,6 +208,26 @@ type ControlPlaneClient interface {
 	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.UserInfo], error)
 	SetUserRole(context.Context, *connect.Request[v1.SetUserRoleRequest]) (*connect.Response[v1.UserInfo], error)
 	SetUserDisabled(context.Context, *connect.Request[v1.SetUserDisabledRequest]) (*connect.Response[v1.UserInfo], error)
+	// Agent management (the engagement's "Agents" view). An agent is a transparent,
+	// authorized component deployed inside a target's network/host; these operator
+	// calls mint and manage its install keys and the agents themselves. The agent
+	// itself speaks the separate AgentService (agent.proto). See
+	// ares-design/agent-design.md and agent-prd.md.
+	//
+	// MintAgentKey records the required host-owner permission and creates a
+	// one-time install key scoped to the engagement with a capability allow-list.
+	MintAgentKey(context.Context, *connect.Request[v1.MintAgentKeyRequest]) (*connect.Response[v1.MintAgentKeyResponse], error)
+	// CancelAgentKey withdraws an unused install key.
+	CancelAgentKey(context.Context, *connect.Request[v1.CancelAgentKeyRequest]) (*connect.Response[v1.CancelAgentKeyResponse], error)
+	// ListAgentKeys lists the engagement's unused install keys.
+	ListAgentKeys(context.Context, *connect.Request[v1.ListAgentKeysRequest]) (*connect.Response[v1.ListAgentKeysResponse], error)
+	// ListAgents lists the engagement's agents with status, host facts, consent and
+	// capability allow-list.
+	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)
+	GetAgent(context.Context, *connect.Request[v1.GetAgentRequest]) (*connect.Response[v1.AgentView], error)
+	// RemoveAgent revokes an agent immediately; it self-uninstalls on next contact.
+	// Findings it already sent are kept.
+	RemoveAgent(context.Context, *connect.Request[v1.RemoveAgentRequest]) (*connect.Response[v1.RemoveAgentResponse], error)
 }
 
 // NewControlPlaneClient constructs a client for the ares.v1.ControlPlane service. By default, it
@@ -415,6 +451,42 @@ func NewControlPlaneClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(controlPlaneMethods.ByName("SetUserDisabled")),
 			connect.WithClientOptions(opts...),
 		),
+		mintAgentKey: connect.NewClient[v1.MintAgentKeyRequest, v1.MintAgentKeyResponse](
+			httpClient,
+			baseURL+ControlPlaneMintAgentKeyProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("MintAgentKey")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelAgentKey: connect.NewClient[v1.CancelAgentKeyRequest, v1.CancelAgentKeyResponse](
+			httpClient,
+			baseURL+ControlPlaneCancelAgentKeyProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("CancelAgentKey")),
+			connect.WithClientOptions(opts...),
+		),
+		listAgentKeys: connect.NewClient[v1.ListAgentKeysRequest, v1.ListAgentKeysResponse](
+			httpClient,
+			baseURL+ControlPlaneListAgentKeysProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("ListAgentKeys")),
+			connect.WithClientOptions(opts...),
+		),
+		listAgents: connect.NewClient[v1.ListAgentsRequest, v1.ListAgentsResponse](
+			httpClient,
+			baseURL+ControlPlaneListAgentsProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("ListAgents")),
+			connect.WithClientOptions(opts...),
+		),
+		getAgent: connect.NewClient[v1.GetAgentRequest, v1.AgentView](
+			httpClient,
+			baseURL+ControlPlaneGetAgentProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("GetAgent")),
+			connect.WithClientOptions(opts...),
+		),
+		removeAgent: connect.NewClient[v1.RemoveAgentRequest, v1.RemoveAgentResponse](
+			httpClient,
+			baseURL+ControlPlaneRemoveAgentProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("RemoveAgent")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -455,6 +527,12 @@ type controlPlaneClient struct {
 	createUser             *connect.Client[v1.CreateUserRequest, v1.UserInfo]
 	setUserRole            *connect.Client[v1.SetUserRoleRequest, v1.UserInfo]
 	setUserDisabled        *connect.Client[v1.SetUserDisabledRequest, v1.UserInfo]
+	mintAgentKey           *connect.Client[v1.MintAgentKeyRequest, v1.MintAgentKeyResponse]
+	cancelAgentKey         *connect.Client[v1.CancelAgentKeyRequest, v1.CancelAgentKeyResponse]
+	listAgentKeys          *connect.Client[v1.ListAgentKeysRequest, v1.ListAgentKeysResponse]
+	listAgents             *connect.Client[v1.ListAgentsRequest, v1.ListAgentsResponse]
+	getAgent               *connect.Client[v1.GetAgentRequest, v1.AgentView]
+	removeAgent            *connect.Client[v1.RemoveAgentRequest, v1.RemoveAgentResponse]
 }
 
 // ListModules calls ares.v1.ControlPlane.ListModules.
@@ -632,6 +710,36 @@ func (c *controlPlaneClient) SetUserDisabled(ctx context.Context, req *connect.R
 	return c.setUserDisabled.CallUnary(ctx, req)
 }
 
+// MintAgentKey calls ares.v1.ControlPlane.MintAgentKey.
+func (c *controlPlaneClient) MintAgentKey(ctx context.Context, req *connect.Request[v1.MintAgentKeyRequest]) (*connect.Response[v1.MintAgentKeyResponse], error) {
+	return c.mintAgentKey.CallUnary(ctx, req)
+}
+
+// CancelAgentKey calls ares.v1.ControlPlane.CancelAgentKey.
+func (c *controlPlaneClient) CancelAgentKey(ctx context.Context, req *connect.Request[v1.CancelAgentKeyRequest]) (*connect.Response[v1.CancelAgentKeyResponse], error) {
+	return c.cancelAgentKey.CallUnary(ctx, req)
+}
+
+// ListAgentKeys calls ares.v1.ControlPlane.ListAgentKeys.
+func (c *controlPlaneClient) ListAgentKeys(ctx context.Context, req *connect.Request[v1.ListAgentKeysRequest]) (*connect.Response[v1.ListAgentKeysResponse], error) {
+	return c.listAgentKeys.CallUnary(ctx, req)
+}
+
+// ListAgents calls ares.v1.ControlPlane.ListAgents.
+func (c *controlPlaneClient) ListAgents(ctx context.Context, req *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error) {
+	return c.listAgents.CallUnary(ctx, req)
+}
+
+// GetAgent calls ares.v1.ControlPlane.GetAgent.
+func (c *controlPlaneClient) GetAgent(ctx context.Context, req *connect.Request[v1.GetAgentRequest]) (*connect.Response[v1.AgentView], error) {
+	return c.getAgent.CallUnary(ctx, req)
+}
+
+// RemoveAgent calls ares.v1.ControlPlane.RemoveAgent.
+func (c *controlPlaneClient) RemoveAgent(ctx context.Context, req *connect.Request[v1.RemoveAgentRequest]) (*connect.Response[v1.RemoveAgentResponse], error) {
+	return c.removeAgent.CallUnary(ctx, req)
+}
+
 // ControlPlaneHandler is an implementation of the ares.v1.ControlPlane service.
 type ControlPlaneHandler interface {
 	ListModules(context.Context, *connect.Request[v1.ListModulesRequest]) (*connect.Response[v1.ListModulesResponse], error)
@@ -695,6 +803,26 @@ type ControlPlaneHandler interface {
 	CreateUser(context.Context, *connect.Request[v1.CreateUserRequest]) (*connect.Response[v1.UserInfo], error)
 	SetUserRole(context.Context, *connect.Request[v1.SetUserRoleRequest]) (*connect.Response[v1.UserInfo], error)
 	SetUserDisabled(context.Context, *connect.Request[v1.SetUserDisabledRequest]) (*connect.Response[v1.UserInfo], error)
+	// Agent management (the engagement's "Agents" view). An agent is a transparent,
+	// authorized component deployed inside a target's network/host; these operator
+	// calls mint and manage its install keys and the agents themselves. The agent
+	// itself speaks the separate AgentService (agent.proto). See
+	// ares-design/agent-design.md and agent-prd.md.
+	//
+	// MintAgentKey records the required host-owner permission and creates a
+	// one-time install key scoped to the engagement with a capability allow-list.
+	MintAgentKey(context.Context, *connect.Request[v1.MintAgentKeyRequest]) (*connect.Response[v1.MintAgentKeyResponse], error)
+	// CancelAgentKey withdraws an unused install key.
+	CancelAgentKey(context.Context, *connect.Request[v1.CancelAgentKeyRequest]) (*connect.Response[v1.CancelAgentKeyResponse], error)
+	// ListAgentKeys lists the engagement's unused install keys.
+	ListAgentKeys(context.Context, *connect.Request[v1.ListAgentKeysRequest]) (*connect.Response[v1.ListAgentKeysResponse], error)
+	// ListAgents lists the engagement's agents with status, host facts, consent and
+	// capability allow-list.
+	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)
+	GetAgent(context.Context, *connect.Request[v1.GetAgentRequest]) (*connect.Response[v1.AgentView], error)
+	// RemoveAgent revokes an agent immediately; it self-uninstalls on next contact.
+	// Findings it already sent are kept.
+	RemoveAgent(context.Context, *connect.Request[v1.RemoveAgentRequest]) (*connect.Response[v1.RemoveAgentResponse], error)
 }
 
 // NewControlPlaneHandler builds an HTTP handler from the service implementation. It returns the
@@ -914,6 +1042,42 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(controlPlaneMethods.ByName("SetUserDisabled")),
 		connect.WithHandlerOptions(opts...),
 	)
+	controlPlaneMintAgentKeyHandler := connect.NewUnaryHandler(
+		ControlPlaneMintAgentKeyProcedure,
+		svc.MintAgentKey,
+		connect.WithSchema(controlPlaneMethods.ByName("MintAgentKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneCancelAgentKeyHandler := connect.NewUnaryHandler(
+		ControlPlaneCancelAgentKeyProcedure,
+		svc.CancelAgentKey,
+		connect.WithSchema(controlPlaneMethods.ByName("CancelAgentKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneListAgentKeysHandler := connect.NewUnaryHandler(
+		ControlPlaneListAgentKeysProcedure,
+		svc.ListAgentKeys,
+		connect.WithSchema(controlPlaneMethods.ByName("ListAgentKeys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneListAgentsHandler := connect.NewUnaryHandler(
+		ControlPlaneListAgentsProcedure,
+		svc.ListAgents,
+		connect.WithSchema(controlPlaneMethods.ByName("ListAgents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneGetAgentHandler := connect.NewUnaryHandler(
+		ControlPlaneGetAgentProcedure,
+		svc.GetAgent,
+		connect.WithSchema(controlPlaneMethods.ByName("GetAgent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneRemoveAgentHandler := connect.NewUnaryHandler(
+		ControlPlaneRemoveAgentProcedure,
+		svc.RemoveAgent,
+		connect.WithSchema(controlPlaneMethods.ByName("RemoveAgent")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ares.v1.ControlPlane/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ControlPlaneListModulesProcedure:
@@ -986,6 +1150,18 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 			controlPlaneSetUserRoleHandler.ServeHTTP(w, r)
 		case ControlPlaneSetUserDisabledProcedure:
 			controlPlaneSetUserDisabledHandler.ServeHTTP(w, r)
+		case ControlPlaneMintAgentKeyProcedure:
+			controlPlaneMintAgentKeyHandler.ServeHTTP(w, r)
+		case ControlPlaneCancelAgentKeyProcedure:
+			controlPlaneCancelAgentKeyHandler.ServeHTTP(w, r)
+		case ControlPlaneListAgentKeysProcedure:
+			controlPlaneListAgentKeysHandler.ServeHTTP(w, r)
+		case ControlPlaneListAgentsProcedure:
+			controlPlaneListAgentsHandler.ServeHTTP(w, r)
+		case ControlPlaneGetAgentProcedure:
+			controlPlaneGetAgentHandler.ServeHTTP(w, r)
+		case ControlPlaneRemoveAgentProcedure:
+			controlPlaneRemoveAgentHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1133,4 +1309,28 @@ func (UnimplementedControlPlaneHandler) SetUserRole(context.Context, *connect.Re
 
 func (UnimplementedControlPlaneHandler) SetUserDisabled(context.Context, *connect.Request[v1.SetUserDisabledRequest]) (*connect.Response[v1.UserInfo], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.SetUserDisabled is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) MintAgentKey(context.Context, *connect.Request[v1.MintAgentKeyRequest]) (*connect.Response[v1.MintAgentKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.MintAgentKey is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) CancelAgentKey(context.Context, *connect.Request[v1.CancelAgentKeyRequest]) (*connect.Response[v1.CancelAgentKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.CancelAgentKey is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) ListAgentKeys(context.Context, *connect.Request[v1.ListAgentKeysRequest]) (*connect.Response[v1.ListAgentKeysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.ListAgentKeys is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.ListAgents is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) GetAgent(context.Context, *connect.Request[v1.GetAgentRequest]) (*connect.Response[v1.AgentView], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.GetAgent is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) RemoveAgent(context.Context, *connect.Request[v1.RemoveAgentRequest]) (*connect.Response[v1.RemoveAgentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.RemoveAgent is not implemented"))
 }
