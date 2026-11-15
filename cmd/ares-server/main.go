@@ -242,6 +242,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle(grpcPath, grpcHTTP)
+	// The agent-facing AgentService is served on its own endpoint behind the
+	// agent-credential interceptor (outbound-initiated by enrolled agents).
+	agentCred := connectapi.NewAgentCredentialInterceptor(agentReg)
+	agentPath, agentHTTP := aresv1connect.NewAgentServiceHandler(
+		connectapi.NewAgentServer(agentReg, store),
+		connect.WithReadMaxBytes(int(maxReqBytes)),
+		connect.WithInterceptors(agentCred))
+	mux.Handle(agentPath, agentHTTP)
 	// The collaborator records out-of-band callbacks under /c/; the more specific
 	// pattern takes precedence over the REST catch-all at "/".
 	mux.Handle("/c/", canaryStore.Handler())

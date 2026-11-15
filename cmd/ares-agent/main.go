@@ -147,7 +147,7 @@ func runEnroll(args []string) error {
 	}
 
 	host := collectHostFacts()
-	transport, err := newTransport(cfg)
+	transport, err := newTransport(cfg, st.Credential)
 	if err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func runRun(args []string) error {
 	}
 	cfg = st.Config()
 
-	transport, err := newTransport(cfg)
+	transport, err := newTransport(cfg, st.Credential)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func runUninstall(args []string) error {
 	if st.Enrolled() {
 		// Best-effort deregister so the server revokes the credential and audits
 		// the teardown; even if the server is unreachable, local state is wiped.
-		if transport, terr := newTransport(st.Config()); terr == nil {
+		if transport, terr := newTransport(st.Config(), st.Credential); terr == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_ = transport.Deregister(ctx, "uninstall")
 			cancel()

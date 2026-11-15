@@ -41,7 +41,7 @@ func (l *agentLoop) Run(ctx context.Context) error {
 		switch {
 		case dir == DirectiveDeregister:
 			l.state.Log("server directive: deregister — tearing down")
-			if transport, terr := newTransport(l.state.Config()); terr == nil {
+			if transport, terr := newTransport(l.state.Config(), l.state.Credential); terr == nil {
 				c, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 				_ = transport.Deregister(c, "operator-revoke")
 				cancel()

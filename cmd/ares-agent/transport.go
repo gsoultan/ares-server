@@ -9,11 +9,22 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"fmt"
 	"net"
+	"net/http"
+	"net/url"
+	"os"
 	"runtime"
+	"time"
+
+	"connectrpc.com/connect"
 
 	"github.com/gsoultan/ares-server/internal/agent"
+	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
+	"github.com/gsoultan/ares-server/internal/gen/ares/v1/aresv1connect"
 )
 
 func runtimeGOOS() string   { return runtime.GOOS }
@@ -93,36 +104,153 @@ type Transport interface {
 	Deregister(ctx context.Context, reason string) error
 }
 
-// errTransportNotWired is returned by the placeholder transport. Phase 1 is the
-// skeleton; the Connect client lands once the proto is generated (scripts/gen.sh)
-// and the design is signed off.
-var errTransportNotWired = errors.New("agent transport not yet wired (phase-1 skeleton): generate the AgentService Connect client and replace newTransport")
-
-// newTransport builds the outbound transport for a config. It honors the
-// explicit proxy when set, otherwise the system/corporate proxy, pins the server
-// certificate (or the operator-supplied inspecting CA), and only ever dials out.
-//
-// Until the Connect client is generated it returns the placeholder below, so the
-// binary builds and the lifecycle commands work end to end against a real
-// server once the client is dropped in.
-func newTransport(cfg config) (Transport, error) {
-	return &placeholderTransport{cfg: cfg}, nil
+// newTransport builds the outbound Connect transport for a config. It is always
+// outbound-initiated over HTTPS, honors the explicit proxy when set and
+// otherwise the system/corporate proxy, and trusts the operator-supplied CA when
+// a TLS-inspecting middlebox is in the path. cred returns the agent's current
+// credential (empty during enrollment); it is sent as a bearer header on every
+// authenticated call.
+func newTransport(cfg config, cred func() string) (Transport, error) {
+	if cfg.ServerURL == "" {
+		return nil, errors.New("no server URL configured")
+	}
+	if cred == nil {
+		cred = func() string { return "" }
+	}
+	hc, err := httpClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	client := aresv1connect.NewAgentServiceClient(hc, cfg.ServerURL)
+	return &connectTransport{client: client, cred: cred}, nil
 }
 
-type placeholderTransport struct{ cfg config }
+// httpClient builds the outbound HTTP client: proxy-aware (explicit or system),
+// with an optional extra trust anchor for a TLS-inspecting proxy. It never opens
+// an inbound listener.
+func httpClient(cfg config) (*http.Client, error) {
+	proxy := http.ProxyFromEnvironment
+	if cfg.Proxy != "" {
+		u, err := url.Parse(cfg.Proxy)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --proxy: %w", err)
+		}
+		proxy = http.ProxyURL(u)
+	}
+	tr := &http.Transport{
+		Proxy:                 proxy,
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
+	if cfg.CAFile != "" {
+		pem, err := os.ReadFile(cfg.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read --trust-ca: %w", err)
+		}
+		pool, err := x509.SystemCertPool()
+		if err != nil || pool == nil {
+			pool = x509.NewCertPool()
+		}
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, errors.New("--trust-ca: no certificates found in file")
+		}
+		tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	}
+	return &http.Client{Transport: tr}, nil
+}
 
-func (p *placeholderTransport) Enroll(context.Context, string, []byte, agent.HostFacts) (EnrollResult, error) {
-	return EnrollResult{}, errTransportNotWired
+// connectTransport is the concrete AgentService client.
+type connectTransport struct {
+	client aresv1connect.AgentServiceClient
+	cred   func() string
 }
-func (p *placeholderTransport) Heartbeat(context.Context) (Directive, []string, error) {
-	return DirectiveContinue, nil, errTransportNotWired
+
+func (c *connectTransport) auth(h http.Header) {
+	if v := c.cred(); v != "" {
+		h.Set("Authorization", "Bearer "+v)
+	}
 }
-func (p *placeholderTransport) PullTasks(context.Context, chan<- Task) error {
-	return errTransportNotWired
+
+func (c *connectTransport) Enroll(ctx context.Context, token string, pubKey []byte, host agent.HostFacts) (EnrollResult, error) {
+	req := connect.NewRequest(&aresv1.EnrollRequest{
+		EnrollmentToken: token,
+		PublicKey:       pubKey,
+		Host: &aresv1.HostFacts{
+			Hostname: host.Hostname, Os: host.OS, Arch: host.Arch,
+			AgentVersion: host.AgentVersion, Ip: host.IP, SegmentCidrs: host.SegmentCIDRs,
+		},
+	})
+	res, err := c.client.Enroll(ctx, req)
+	if err != nil {
+		return EnrollResult{}, err
+	}
+	if !res.Msg.GetOk() {
+		return EnrollResult{}, errors.New("enrollment refused by server")
+	}
+	return EnrollResult{
+		AgentID:      res.Msg.GetAgentId(),
+		Credential:   res.Msg.GetCredential(),
+		TenantID:     res.Msg.GetTenantId(),
+		EngagementID: res.Msg.GetEngagementId(),
+		Capabilities: res.Msg.GetCapabilities(),
+	}, nil
 }
-func (p *placeholderTransport) PushResults(context.Context, Result) error {
-	return errTransportNotWired
+
+func (c *connectTransport) Heartbeat(ctx context.Context) (Directive, []string, error) {
+	req := connect.NewRequest(&aresv1.HeartbeatRequest{AgentVersion: agentVersion})
+	c.auth(req.Header())
+	res, err := c.client.Heartbeat(ctx, req)
+	if err != nil {
+		return DirectiveContinue, nil, err
+	}
+	var dir Directive
+	switch res.Msg.GetDirective() {
+	case aresv1.AgentDirective_AGENT_DIRECTIVE_STOP:
+		dir = DirectiveStop
+	case aresv1.AgentDirective_AGENT_DIRECTIVE_DEREGISTER:
+		dir = DirectiveDeregister
+	default:
+		dir = DirectiveContinue
+	}
+	return dir, res.Msg.GetCapabilities(), nil
 }
-func (p *placeholderTransport) Deregister(context.Context, string) error {
-	return errTransportNotWired
+
+func (c *connectTransport) PullTasks(ctx context.Context, out chan<- Task) error {
+	req := connect.NewRequest(&aresv1.PullTasksRequest{})
+	c.auth(req.Header())
+	stream, err := c.client.PullTasks(ctx, req)
+	if err != nil {
+		return err
+	}
+	for stream.Receive() {
+		m := stream.Msg()
+		select {
+		case out <- Task{
+			TaskID:        m.GetTaskId(),
+			Capability:    m.GetCapability(),
+			ScopeSnapshot: m.GetScopeSnapshot(),
+			Params:        m.GetParams(),
+		}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return stream.Err()
+}
+
+func (c *connectTransport) PushResults(ctx context.Context, r Result) error {
+	req := connect.NewRequest(&aresv1.PushResultsRequest{
+		TaskId: r.TaskID, Results: r.Results, Denied: r.Denied, Error: r.Error,
+	})
+	c.auth(req.Header())
+	_, err := c.client.PushResults(ctx, req)
+	return err
+}
+
+func (c *connectTransport) Deregister(ctx context.Context, reason string) error {
+	req := connect.NewRequest(&aresv1.DeregisterRequest{Reason: reason})
+	c.auth(req.Header())
+	_, err := c.client.Deregister(ctx, req)
+	return err
 }
