@@ -77,6 +77,7 @@ func New(store engagement.Store, reg *module.Registry, q *queue.Queue, outcomes 
 		pending:  newPendingJobs(),
 		memo:     newMemo(4096),
 	}
+	h.restoreFindingStatuses()
 	if adv, err := ai.AdvisorFromEnv(); err == nil {
 		h.advisor = adv
 		log.Printf("ai advisor enabled: provider=%s model=%s", adv.Provider().Name(), adv.Provider().Model())
@@ -314,14 +315,16 @@ func (h *Handler) DispatchJob(_ context.Context, req *connect.Request[aresv1.Dis
 		targets = append(targets, targetDomain(t))
 	}
 	jobID := uuid.NewV7()
-	h.queue.Enqueue(queue.Job{
+	if err := h.queue.TryEnqueue(queue.Job{
 		ID:           jobID,
 		EngagementID: eng.ID,
 		Module:       req.Msg.GetModule(),
 		Actor:        actor,
 		Targets:      targets,
 		Params:       params,
-	})
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("job queue is full, try again shortly"))
+	}
 	// Record it as running so ListJobs shows an in-flight row that survives a page
 	// reload; it is pruned once the worker records the outcome.
 	h.pending.add(jobID, eng.ID, req.Msg.GetModule())

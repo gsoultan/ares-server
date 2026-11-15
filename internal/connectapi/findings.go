@@ -62,6 +62,22 @@ func (s *findingStatusStore) version(engagementID string) uint64 {
 	return s.versions[engagementID]
 }
 
+// restoreFindingStatuses rebuilds the triage state from the audit trails, where
+// every status change is recorded ("finding-status", target = finding id,
+// detail = status). Job outcomes now survive a restart, so their findings'
+// statuses must too; the audit trail already holds them, in order.
+func (h *Handler) restoreFindingStatuses() {
+	for _, t := range h.store.ListTenants() {
+		for _, eng := range h.store.List(t.ID) {
+			for _, e := range eng.Audit.Entries() {
+				if e.Action == "finding-status" && validFindingStatus(e.Detail) {
+					h.statuses.set(eng.ID, e.Target, e.Detail)
+				}
+			}
+		}
+	}
+}
+
 func validFindingStatus(s string) bool {
 	switch s {
 	case "open", "in_progress", "fixed":

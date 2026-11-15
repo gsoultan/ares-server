@@ -30,7 +30,7 @@ import (
 
 // All returns every model, for storm.Build and storm generate.
 func All() []any {
-	return []any{&Tenant{}, &Engagement{}, &AuditEntry{}, &User{}, &Session{}, &Setting{}, &SetupConfig{}}
+	return []any{&Tenant{}, &Engagement{}, &AuditEntry{}, &JobOutcome{}, &User{}, &Session{}, &Setting{}, &SetupConfig{}}
 }
 
 // Tenant is a client workspace.
@@ -80,6 +80,21 @@ type AuditEntry struct {
 }
 
 func (a *AuditEntry) Schema(tb *storm.Table) { tb.PrimaryKey(&a.EngagementID, &a.Seq) }
+
+// JobOutcome is one finished job's outcome (its gate decision and results),
+// stored compressed (worker.EncodeOutcome). They used to live only in memory
+// and were lost on restart, with the findings derived from them.
+type JobOutcome struct {
+	JobID        string
+	EngagementID string
+	StartedAt    time.Time
+	Data         []byte
+}
+
+func (j *JobOutcome) Schema(tb *storm.Table) {
+	tb.PrimaryKey(&j.JobID)
+	tb.Index(&j.EngagementID)
+}
 
 // User is an account. Email carries a unique constraint so the database enforces
 // one account per email; the password is stored only as its PBKDF2 hash.

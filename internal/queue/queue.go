@@ -13,6 +13,7 @@ package queue
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/gsoultan/ares/module"
 )
@@ -44,6 +45,21 @@ func New(size int) *Queue {
 
 // Enqueue adds a job, blocking only if the buffer is full.
 func (q *Queue) Enqueue(j Job) { q.ch <- j }
+
+// ErrFull is returned by TryEnqueue when the queue is at capacity.
+var ErrFull = errors.New("queue: full")
+
+// TryEnqueue adds a job without blocking, or returns ErrFull. Request handlers
+// use it so a full queue answers "try again later" at once instead of holding
+// the request (and its goroutine and connection) until a worker frees a slot.
+func (q *Queue) TryEnqueue(j Job) error {
+	select {
+	case q.ch <- j:
+		return nil
+	default:
+		return ErrFull
+	}
+}
 
 // C exposes the channel workers consume from.
 func (q *Queue) C() <-chan Job { return q.ch }

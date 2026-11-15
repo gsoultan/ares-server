@@ -32,6 +32,18 @@ func _assertEngagementShape(m m0.Engagement) {
 	}
 }
 
+// _assertJobOutcomeShape fails to compile if m0.JobOutcome gains, loses, renames or
+// reorders a field. Regenerate: `storm generate`.
+func _assertJobOutcomeShape(m m0.JobOutcome) {
+	type shape m0.JobOutcome
+	_ = shape{
+		m.JobID,
+		m.EngagementID,
+		m.StartedAt,
+		m.Data,
+	}
+}
+
 // _assertSessionShape fails to compile if m0.Session gains, loses, renames or
 // reorders a field. Regenerate: `storm generate`.
 func _assertSessionShape(m m0.Session) {

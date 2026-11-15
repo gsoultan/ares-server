@@ -22,6 +22,7 @@ import (
 	"net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,6 +49,8 @@ import (
 )
 
 func main() {
+	setMemoryLimit()
+
 	addr := os.Getenv("ARES_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -93,6 +96,7 @@ func main() {
 	var userStore auth.UserStore
 	var sessionStore auth.SessionStore
 	var setupStore setup.Store
+	var outcomeBackend worker.OutcomeBackend // nil: in-memory outcomes (ARES_DB=memory)
 	dbPath := os.Getenv("ARES_DB")
 	if dbPath == "" {
 		// ARES_PG_URL is the dedicated Postgres DSN (what the dev script exports);
@@ -122,6 +126,7 @@ func main() {
 		userStore = ps.Users()
 		sessionStore = ps.Sessions()
 		setupStore = ps.Setup()
+		outcomeBackend = ps.Outcomes()
 		log.Print("ares store: postgres")
 	default:
 		ss, err := stormstore.Open(dbPath)
@@ -134,6 +139,7 @@ func main() {
 		userStore = ss.Users()
 		sessionStore = ss.Sessions()
 		setupStore = ss.Setup()
+		outcomeBackend = ss.Outcomes()
 		log.Printf("ares store: storm at %s", dbPath)
 	}
 
@@ -170,7 +176,18 @@ func main() {
 	}
 
 	q := queue.New(256)
-	outcomes := worker.NewMemOutcomes()
+	// Job outcomes: persisted (compressed) when there is a datastore, so results
+	// and findings survive a restart, with a bounded in-memory cache of recently
+	// used engagements' outcomes (ARES_OUTCOME_CACHE_RESULTS, in results).
+	var outcomes worker.OutcomeStore = worker.NewMemOutcomes()
+	if outcomeBackend != nil {
+		maxResults, _ := strconv.Atoi(os.Getenv("ARES_OUTCOME_CACHE_RESULTS"))
+		po, err := worker.NewPersistentOutcomes(outcomeBackend, maxResults)
+		if err != nil {
+			log.Fatalf("load job outcomes: %v", err)
+		}
+		outcomes = po
+	}
 	proc := worker.NewProcessor(reg, store)
 	pool := worker.NewPool(proc, outcomes, 8)
 
@@ -270,10 +287,17 @@ func main() {
 
 	// h2c lets plaintext HTTP/2 through, which true gRPC needs; behind TLS this
 	// is ordinary gRPC. REST and Connect also work over HTTP/1.1 on the same port.
+	// Idle keep-alive connections are closed after two minutes: with thousands
+	// of clients, each idle connection otherwise pins its buffers and goroutine
+	// for as long as the client keeps it open. Read/write timeouts stay unset
+	// on purpose, since large evidence uploads and report downloads are
+	// legitimately slow.
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           h2c.NewHandler(mux, &http2.Server{}),
+		Handler:           h2c.NewHandler(mux, &http2.Server{IdleTimeout: 2 * time.Minute}),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    64 << 10,
 	}
 
 	go func() {
@@ -379,4 +403,29 @@ func authCacheTTL(v string) (time.Duration, bool) {
 		return auth.DefaultCacheTTL, true
 	}
 	return d, true
+}
+
+// setMemoryLimit gives the Go runtime a soft memory limit when none is set:
+// 90% of the container's cgroup memory limit, if there is one. The garbage
+// collector then works harder as the heap nears the limit instead of letting
+// it grow until the container is OOM-killed, so the server can run in a small
+// memory allowance. GOMEMLIMIT, when set, wins (the runtime reads it itself).
+func setMemoryLimit() {
+	if os.Getenv("GOMEMLIMIT") != "" {
+		return
+	}
+	for _, f := range []string{"/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+		if err != nil || n <= 0 || n > 1<<50 { // "max" or an unlimited sentinel
+			return
+		}
+		limit := n / 10 * 9
+		debug.SetMemoryLimit(limit)
+		log.Printf("ares memory: soft limit %d MiB (90%% of the container's %d MiB)", limit>>20, n>>20)
+		return
+	}
 }

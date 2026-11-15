@@ -19,11 +19,12 @@ import (
 var FlushOrder = map[string]int{
 	"audit_entries": 0,
 	"engagements":   1,
-	"sessions":      2,
-	"settings":      3,
-	"setup_configs": 4,
-	"tenants":       5,
-	"users":         6,
+	"job_outcomes":  2,
+	"sessions":      3,
+	"settings":      4,
+	"setup_configs": 5,
+	"tenants":       6,
+	"users":         7,
 }
 
 // NewUnit stages writes across this context and flushes them in foreign-key
