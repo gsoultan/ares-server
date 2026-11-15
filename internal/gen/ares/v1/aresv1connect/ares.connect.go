@@ -143,6 +143,9 @@ const (
 	// ControlPlaneRemoveAgentProcedure is the fully-qualified name of the ControlPlane's RemoveAgent
 	// RPC.
 	ControlPlaneRemoveAgentProcedure = "/ares.v1.ControlPlane/RemoveAgent"
+	// ControlPlaneDispatchAgentJobProcedure is the fully-qualified name of the ControlPlane's
+	// DispatchAgentJob RPC.
+	ControlPlaneDispatchAgentJobProcedure = "/ares.v1.ControlPlane/DispatchAgentJob"
 )
 
 // ControlPlaneClient is a client for the ares.v1.ControlPlane service.
@@ -228,6 +231,12 @@ type ControlPlaneClient interface {
 	// RemoveAgent revokes an agent immediately; it self-uninstalls on next contact.
 	// Findings it already sent are kept.
 	RemoveAgent(context.Context, *connect.Request[v1.RemoveAgentRequest]) (*connect.Response[v1.RemoveAgentResponse], error)
+	// DispatchAgentJob queues an authorized check for an agent to run from inside
+	// the network. The server gate-checks it (engagement runnable, agent bound,
+	// module on the agent's capability allow-list) and sends the agent the
+	// engagement scope snapshot; the agent re-enforces the scope locally before
+	// touching any target. Results flow back into the same findings pipeline.
+	DispatchAgentJob(context.Context, *connect.Request[v1.DispatchAgentJobRequest]) (*connect.Response[v1.DispatchAgentJobResponse], error)
 }
 
 // NewControlPlaneClient constructs a client for the ares.v1.ControlPlane service. By default, it
@@ -487,6 +496,12 @@ func NewControlPlaneClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(controlPlaneMethods.ByName("RemoveAgent")),
 			connect.WithClientOptions(opts...),
 		),
+		dispatchAgentJob: connect.NewClient[v1.DispatchAgentJobRequest, v1.DispatchAgentJobResponse](
+			httpClient,
+			baseURL+ControlPlaneDispatchAgentJobProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("DispatchAgentJob")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -533,6 +548,7 @@ type controlPlaneClient struct {
 	listAgents             *connect.Client[v1.ListAgentsRequest, v1.ListAgentsResponse]
 	getAgent               *connect.Client[v1.GetAgentRequest, v1.AgentView]
 	removeAgent            *connect.Client[v1.RemoveAgentRequest, v1.RemoveAgentResponse]
+	dispatchAgentJob       *connect.Client[v1.DispatchAgentJobRequest, v1.DispatchAgentJobResponse]
 }
 
 // ListModules calls ares.v1.ControlPlane.ListModules.
@@ -740,6 +756,11 @@ func (c *controlPlaneClient) RemoveAgent(ctx context.Context, req *connect.Reque
 	return c.removeAgent.CallUnary(ctx, req)
 }
 
+// DispatchAgentJob calls ares.v1.ControlPlane.DispatchAgentJob.
+func (c *controlPlaneClient) DispatchAgentJob(ctx context.Context, req *connect.Request[v1.DispatchAgentJobRequest]) (*connect.Response[v1.DispatchAgentJobResponse], error) {
+	return c.dispatchAgentJob.CallUnary(ctx, req)
+}
+
 // ControlPlaneHandler is an implementation of the ares.v1.ControlPlane service.
 type ControlPlaneHandler interface {
 	ListModules(context.Context, *connect.Request[v1.ListModulesRequest]) (*connect.Response[v1.ListModulesResponse], error)
@@ -823,6 +844,12 @@ type ControlPlaneHandler interface {
 	// RemoveAgent revokes an agent immediately; it self-uninstalls on next contact.
 	// Findings it already sent are kept.
 	RemoveAgent(context.Context, *connect.Request[v1.RemoveAgentRequest]) (*connect.Response[v1.RemoveAgentResponse], error)
+	// DispatchAgentJob queues an authorized check for an agent to run from inside
+	// the network. The server gate-checks it (engagement runnable, agent bound,
+	// module on the agent's capability allow-list) and sends the agent the
+	// engagement scope snapshot; the agent re-enforces the scope locally before
+	// touching any target. Results flow back into the same findings pipeline.
+	DispatchAgentJob(context.Context, *connect.Request[v1.DispatchAgentJobRequest]) (*connect.Response[v1.DispatchAgentJobResponse], error)
 }
 
 // NewControlPlaneHandler builds an HTTP handler from the service implementation. It returns the
@@ -1078,6 +1105,12 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(controlPlaneMethods.ByName("RemoveAgent")),
 		connect.WithHandlerOptions(opts...),
 	)
+	controlPlaneDispatchAgentJobHandler := connect.NewUnaryHandler(
+		ControlPlaneDispatchAgentJobProcedure,
+		svc.DispatchAgentJob,
+		connect.WithSchema(controlPlaneMethods.ByName("DispatchAgentJob")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ares.v1.ControlPlane/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ControlPlaneListModulesProcedure:
@@ -1162,6 +1195,8 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 			controlPlaneGetAgentHandler.ServeHTTP(w, r)
 		case ControlPlaneRemoveAgentProcedure:
 			controlPlaneRemoveAgentHandler.ServeHTTP(w, r)
+		case ControlPlaneDispatchAgentJobProcedure:
+			controlPlaneDispatchAgentJobHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1333,4 +1368,8 @@ func (UnimplementedControlPlaneHandler) GetAgent(context.Context, *connect.Reque
 
 func (UnimplementedControlPlaneHandler) RemoveAgent(context.Context, *connect.Request[v1.RemoveAgentRequest]) (*connect.Response[v1.RemoveAgentResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.RemoveAgent is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) DispatchAgentJob(context.Context, *connect.Request[v1.DispatchAgentJobRequest]) (*connect.Response[v1.DispatchAgentJobResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.DispatchAgentJob is not implemented"))
 }

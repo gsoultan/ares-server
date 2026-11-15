@@ -202,6 +202,7 @@ type Registry struct {
 	credentials map[string]string      // credential hash -> agent id
 	tokens      map[string]EnrollToken // token hash -> token
 	tokensByID  map[string]string      // key id -> token hash (for list/cancel)
+	tasks       map[string][]Task      // agent id -> queued tasks
 	gate        EngagementGate
 	now         func() time.Time // injectable clock for tests
 }

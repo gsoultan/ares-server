@@ -9,8 +9,11 @@ package connectapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -18,6 +21,8 @@ import (
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares-server/internal/gen/ares/v1/aresv1connect"
+	"github.com/gsoultan/ares-server/internal/worker"
+	"github.com/gsoultan/ares/module"
 )
 
 // AgentServer implements the agent-facing AgentService. It is served on its own
@@ -34,15 +39,17 @@ import (
 // random secret, stored server-side only as a SHA-256 hash and bound to the
 // agent's {tenant, engagement}; it is revoked immediately on removal.
 type AgentServer struct {
-	agents *agent.Registry
-	store  engagement.Store
+	agents   *agent.Registry
+	store    engagement.Store
+	outcomes worker.OutcomeStore
 }
 
 var _ aresv1connect.AgentServiceHandler = (*AgentServer)(nil)
 
-// NewAgentServer builds the agent-facing service over the registry.
-func NewAgentServer(agents *agent.Registry, store engagement.Store) *AgentServer {
-	return &AgentServer{agents: agents, store: store}
+// NewAgentServer builds the agent-facing service over the registry. outcomes may
+// be nil (then pushed results are accepted but not recorded).
+func NewAgentServer(agents *agent.Registry, store engagement.Store, outcomes worker.OutcomeStore) *AgentServer {
+	return &AgentServer{agents: agents, store: store, outcomes: outcomes}
 }
 
 // Enroll redeems a one-time install key and registers the agent. It is the only
@@ -96,28 +103,79 @@ func (s *AgentServer) Heartbeat(ctx context.Context, _ *connect.Request[aresv1.H
 	}), nil
 }
 
-// PullTasks opens the task stream. Phase 1 holds the stream open with no tasks
-// dispatched yet (no live capability runs before the capability phases land); it
-// returns cleanly when the agent closes it or its engagement stops.
-func (s *AgentServer) PullTasks(ctx context.Context, _ *connect.Request[aresv1.PullTasksRequest], _ *connect.ServerStream[aresv1.AgentTask]) error {
+// PullTasks streams the tasks an operator has dispatched for this agent. The
+// agent opens it outbound; the server never dials in. It delivers any queued
+// tasks, then polls while the stream stays open, and returns when the agent
+// disconnects.
+func (s *AgentServer) PullTasks(ctx context.Context, _ *connect.Request[aresv1.PullTasksRequest], stream *connect.ServerStream[aresv1.AgentTask]) error {
 	a, err := agentFromContext(ctx)
 	if err != nil {
 		return err
 	}
-	// Until the capability phases, there is nothing to dispatch. Block on the
-	// request context so the agent's long-poll behaves correctly, and return when
-	// the agent disconnects or the engagement is no longer runnable.
-	<-ctx.Done()
-	_ = a
-	return nil
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		for _, t := range s.agents.DrainTasks(a.ID) {
+			if err := stream.Send(&aresv1.AgentTask{
+				TaskId:        t.ID,
+				Capability:    t.Module,
+				ScopeSnapshot: t.ScopeSnapshot,
+				Params:        t.Params,
+			}); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+	}
 }
 
-// PushResults forwards an agent's results. Phase 1 has no dispatch, so this
-// accepts and acknowledges without a pipeline write; the capability phases wire
-// results into the findings/forensics pipeline sealed per-tenant.
-func (s *AgentServer) PushResults(ctx context.Context, _ *connect.Request[aresv1.PushResultsRequest]) (*connect.Response[aresv1.PushResultsResponse], error) {
-	if _, err := agentFromContext(ctx); err != nil {
+// PushResults forwards an agent's results into the same outcome/findings pipeline
+// as server-run jobs, attributed to the agent, then clears its "running a check"
+// status. Idempotent on task id. Results carry the module.Result values the agent
+// produced; denied carries targets its local gate refused, for the audit trail.
+func (s *AgentServer) PushResults(ctx context.Context, req *connect.Request[aresv1.PushResultsRequest]) (*connect.Response[aresv1.PushResultsResponse], error) {
+	a, err := agentFromContext(ctx)
+	if err != nil {
 		return nil, err
+	}
+	s.agents.SetCurrentCapability(a.ID, "")
+
+	var results []module.Result
+	if raw := req.Msg.GetResults(); len(raw) > 0 {
+		if err := json.Unmarshal(raw, &results); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid results: %w", err))
+		}
+	}
+	var denied []worker.Denial
+	if raw := req.Msg.GetDenied(); len(raw) > 0 {
+		_ = json.Unmarshal(raw, &denied)
+	}
+
+	moduleName := ""
+	if len(results) > 0 {
+		moduleName = results[0].Capability
+	}
+	if s.outcomes != nil {
+		now := time.Now()
+		s.outcomes.Save(worker.Outcome{
+			JobID:      req.Msg.GetTaskId(),
+			Engagement: a.EngagementID,
+			Module:     moduleName,
+			Results:    results,
+			Denied:     denied,
+			Error:      req.Msg.GetError(),
+			StartedAt:  now,
+			FinishedAt: now,
+		})
+	}
+	if eng, ok := s.store.Get(a.EngagementID); ok {
+		eng.Audit.Append(a.ID, "agent.results", req.Msg.GetTaskId(),
+			fmt.Sprintf("%d result(s)", len(results)))
+		_ = s.store.Save(eng)
 	}
 	return connect.NewResponse(&aresv1.PushResultsResponse{Ok: true, Accepted: true}), nil
 }

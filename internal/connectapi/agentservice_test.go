@@ -15,6 +15,7 @@ import (
 
 	"github.com/gsoultan/ares-server/internal/agent"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
+	"github.com/gsoultan/ares-server/internal/worker"
 )
 
 func TestAgentServiceEnrollHeartbeatDeregister(t *testing.T) {
@@ -34,7 +35,7 @@ func TestAgentServiceEnrollHeartbeatDeregister(t *testing.T) {
 		t.Fatalf("MintAgentKey: %v", err)
 	}
 
-	svc := NewAgentServer(reg, h.store)
+	svc := NewAgentServer(reg, h.store, worker.NewMemOutcomes())
 
 	// Agent enrolls with the install key (public call).
 	enr, err := svc.Enroll(ctx, connect.NewRequest(&aresv1.EnrollRequest{
@@ -75,7 +76,7 @@ func TestAgentServiceEnrollHeartbeatDeregister(t *testing.T) {
 
 func TestAgentServiceCallsRequireCredential(t *testing.T) {
 	h := newTestHandler(t)
-	svc := NewAgentServer(agent.NewRegistry(nil), h.store)
+	svc := NewAgentServer(agent.NewRegistry(nil), h.store, nil)
 	// No agent in context → unauthenticated.
 	if _, err := svc.Heartbeat(context.Background(), connect.NewRequest(&aresv1.HeartbeatRequest{})); connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Fatalf("heartbeat without credential: want Unauthenticated, got %v", err)

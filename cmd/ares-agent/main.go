@@ -188,11 +188,16 @@ func runRun(args []string) error {
 		return err
 	}
 
+	runner, err := newRunner()
+	if err != nil {
+		return fmt.Errorf("init capability runner: %w", err)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	st.Log("agent run: connecting outbound to %s", cfg.ServerURL)
-	loop := &agentLoop{state: st, transport: transport}
+	loop := &agentLoop{state: st, transport: transport, runner: runner}
 	return loop.Run(ctx)
 }
 

@@ -28,6 +28,7 @@ const (
 type agentLoop struct {
 	state     *state
 	transport Transport
+	runner    *capabilityRunner
 }
 
 // Run drives the loop until ctx is cancelled or the agent is told to deregister.
@@ -132,15 +133,22 @@ func (l *agentLoop) drainTasks(ctx context.Context) {
 	}
 }
 
-// handleTask runs one authorized task. Phase-1 stub: it records receipt and
-// enqueues a placeholder result so the store-and-forward path is exercised. No
-// live capability runs yet.
+// handleTask runs one authorized task through the engine, re-enforcing the
+// engagement scope locally, and enqueues the result for store-and-forward
+// delivery. If the runner is unavailable the task is still acknowledged with an
+// error so the server is not left waiting.
 func (l *agentLoop) handleTask(t Task) {
-	l.state.Log("task %s: capability %q received (phase-1 skeleton: not executed)", t.TaskID, t.Capability)
-	_ = l.state.Enqueue(Result{
-		TaskID: t.TaskID,
-		Error:  "capability not yet enabled (phase-1 skeleton)",
-	})
+	l.state.Log("task %s: running %q", t.TaskID, t.Capability)
+	if l.runner == nil {
+		_ = l.state.Enqueue(Result{TaskID: t.TaskID, Error: "agent runner unavailable"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	res := l.runner.Run(ctx, t)
+	l.state.Log("task %s: finished (%d bytes of results%s)", t.TaskID, len(res.Results),
+		map[bool]string{true: ", with errors", false: ""}[res.Error != ""])
+	_ = l.state.Enqueue(res)
 }
 
 // sleep waits d, returning false if the context is cancelled first.

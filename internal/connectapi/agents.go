@@ -9,6 +9,7 @@ package connectapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/gsoultan/ares-server/internal/agent"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
+	"github.com/gsoultan/ares/module"
 )
 
 // These are the operator-facing agent-management RPCs on the ControlPlane
@@ -158,6 +160,65 @@ func (h *Handler) RemoveAgent(_ context.Context, req *connect.Request[aresv1.Rem
 	eng.Audit.Append("operator", "agent.remove", a.ID, "agent revoked; self-uninstalls on next contact")
 	_ = h.store.Save(eng)
 	return connect.NewResponse(&aresv1.RemoveAgentResponse{Ok: true}), nil
+}
+
+// DispatchAgentJob queues an authorized check for an agent. The server
+// gate-checks it and hands the agent the engagement scope snapshot; the agent
+// re-enforces the scope locally before touching a target (the double barrier).
+func (h *Handler) DispatchAgentJob(_ context.Context, req *connect.Request[aresv1.DispatchAgentJobRequest]) (*connect.Response[aresv1.DispatchAgentJobResponse], error) {
+	if err := h.agentsEnabled(); err != nil {
+		return nil, err
+	}
+	eng, err := h.engagementInTenant(req.Msg.GetTenantId(), req.Msg.GetEngagementId())
+	if err != nil {
+		return nil, err
+	}
+	if ok, reason := eng.CanRun(); !ok {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(reason))
+	}
+	a, ok := h.agents.Get(req.Msg.GetAgentId())
+	if !ok || a.TenantID != eng.TenantID || a.EngagementID != eng.ID {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("unknown agent"))
+	}
+	mod := req.Msg.GetModule()
+	// The module must exist in the engine and be on the agent's capability
+	// allow-list. Both the server (here) and the agent enforce this.
+	if _, known := h.reg.Get(mod); !known || agent.GroupOf(mod) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			errors.New("unknown or non-dispatchable module"))
+	}
+	if err := h.agents.AuthorizeModule(a.ID, mod); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied,
+			errors.New("module not on the agent's capability allow-list"))
+	}
+	// Snapshot the engagement scope so the agent enforces the same boundary.
+	snap, err := json.Marshal(eng.Scope.Snapshot())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	targets := make([]module.Target, 0, len(req.Msg.GetTargets()))
+	for _, t := range req.Msg.GetTargets() {
+		targets = append(targets, targetDomain(t))
+	}
+	params, err := json.Marshal(agentTaskParams{Targets: targets})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	taskID, err := h.agents.EnqueueTask(a.ID, agent.Task{Module: mod, ScopeSnapshot: snap, Params: params})
+	if err != nil {
+		return nil, mapAgentErr(err)
+	}
+	// Reflect "running a check" in the agent's UI status.
+	h.agents.SetCurrentCapability(a.ID, mod)
+	eng.Audit.Append("operator", "agent.dispatch", a.ID, "queued "+mod)
+	_ = h.store.Save(eng)
+	return connect.NewResponse(&aresv1.DispatchAgentJobResponse{TaskId: taskID}), nil
+}
+
+// agentTaskParams is the JSON payload of an agent task (the capability-specific
+// parameters). For the recon capabilities it is just the target list.
+type agentTaskParams struct {
+	Targets []module.Target `json:"targets"`
 }
 
 // engagementGate adapts the engagement store into the registry's gate: an agent

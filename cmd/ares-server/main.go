@@ -246,7 +246,7 @@ func main() {
 	// agent-credential interceptor (outbound-initiated by enrolled agents).
 	agentCred := connectapi.NewAgentCredentialInterceptor(agentReg)
 	agentPath, agentHTTP := aresv1connect.NewAgentServiceHandler(
-		connectapi.NewAgentServer(agentReg, store),
+		connectapi.NewAgentServer(agentReg, store, outcomes),
 		connect.WithReadMaxBytes(int(maxReqBytes)),
 		connect.WithInterceptors(agentCred))
 	mux.Handle(agentPath, agentHTTP)

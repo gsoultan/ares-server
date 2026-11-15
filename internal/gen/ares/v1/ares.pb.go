@@ -6193,6 +6193,128 @@ func (x *RemoveAgentResponse) GetOk() bool {
 	return false
 }
 
+type DispatchAgentJobRequest struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	EngagementId string                 `protobuf:"bytes,1,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
+	TenantId     string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	AgentId      string                 `protobuf:"bytes,3,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	// module is the engine module to run (e.g. "portscan", "webcheck"); its
+	// capability group must be on the agent's allow-list.
+	Module        string    `protobuf:"bytes,4,opt,name=module,proto3" json:"module,omitempty"`
+	Targets       []*Target `protobuf:"bytes,5,rep,name=targets,proto3" json:"targets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DispatchAgentJobRequest) Reset() {
+	*x = DispatchAgentJobRequest{}
+	mi := &file_ares_v1_ares_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DispatchAgentJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DispatchAgentJobRequest) ProtoMessage() {}
+
+func (x *DispatchAgentJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DispatchAgentJobRequest.ProtoReflect.Descriptor instead.
+func (*DispatchAgentJobRequest) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *DispatchAgentJobRequest) GetEngagementId() string {
+	if x != nil {
+		return x.EngagementId
+	}
+	return ""
+}
+
+func (x *DispatchAgentJobRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *DispatchAgentJobRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *DispatchAgentJobRequest) GetModule() string {
+	if x != nil {
+		return x.Module
+	}
+	return ""
+}
+
+func (x *DispatchAgentJobRequest) GetTargets() []*Target {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+type DispatchAgentJobResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DispatchAgentJobResponse) Reset() {
+	*x = DispatchAgentJobResponse{}
+	mi := &file_ares_v1_ares_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DispatchAgentJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DispatchAgentJobResponse) ProtoMessage() {}
+
+func (x *DispatchAgentJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DispatchAgentJobResponse.ProtoReflect.Descriptor instead.
+func (*DispatchAgentJobResponse) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *DispatchAgentJobResponse) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
 var File_ares_v1_ares_proto protoreflect.FileDescriptor
 
 const file_ares_v1_ares_proto_rawDesc = "" +
@@ -6687,13 +6809,21 @@ const file_ares_v1_ares_proto_rawDesc = "" +
 	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x19\n" +
 	"\bagent_id\x18\x03 \x01(\tR\aagentId\"%\n" +
 	"\x13RemoveAgentResponse\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok*\xa2\x01\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\xb9\x01\n" +
+	"\x17DispatchAgentJobRequest\x12#\n" +
+	"\rengagement_id\x18\x01 \x01(\tR\fengagementId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x19\n" +
+	"\bagent_id\x18\x03 \x01(\tR\aagentId\x12\x16\n" +
+	"\x06module\x18\x04 \x01(\tR\x06module\x12)\n" +
+	"\atargets\x18\x05 \x03(\v2\x0f.ares.v1.TargetR\atargets\"3\n" +
+	"\x18DispatchAgentJobResponse\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId*\xa2\x01\n" +
 	"\vAgentStatus\x12\x1c\n" +
 	"\x18AGENT_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16AGENT_STATUS_CONNECTED\x10\x01\x12\x1e\n" +
 	"\x1aAGENT_STATUS_RUNNING_CHECK\x10\x02\x12\x1f\n" +
 	"\x1bAGENT_STATUS_NOT_HEARD_FROM\x10\x03\x12\x18\n" +
-	"\x14AGENT_STATUS_REMOVED\x10\x042\x83\x17\n" +
+	"\x14AGENT_STATUS_REMOVED\x10\x042\xdc\x17\n" +
 	"\fControlPlane\x12H\n" +
 	"\vListModules\x12\x1b.ares.v1.ListModulesRequest\x1a\x1c.ares.v1.ListModulesResponse\x12=\n" +
 	"\fCreateTenant\x12\x1c.ares.v1.CreateTenantRequest\x1a\x0f.ares.v1.Tenant\x12H\n" +
@@ -6737,7 +6867,8 @@ const file_ares_v1_ares_proto_rawDesc = "" +
 	"\n" +
 	"ListAgents\x12\x1a.ares.v1.ListAgentsRequest\x1a\x1b.ares.v1.ListAgentsResponse\x128\n" +
 	"\bGetAgent\x12\x18.ares.v1.GetAgentRequest\x1a\x12.ares.v1.AgentView\x12H\n" +
-	"\vRemoveAgent\x12\x1b.ares.v1.RemoveAgentRequest\x1a\x1c.ares.v1.RemoveAgentResponseB\x92\x01\n" +
+	"\vRemoveAgent\x12\x1b.ares.v1.RemoveAgentRequest\x1a\x1c.ares.v1.RemoveAgentResponse\x12W\n" +
+	"\x10DispatchAgentJob\x12 .ares.v1.DispatchAgentJobRequest\x1a!.ares.v1.DispatchAgentJobResponseB\x92\x01\n" +
 	"\vcom.ares.v1B\tAresProtoP\x01Z;github.com/gsoultan/ares-server/internal/gen/ares/v1;aresv1\xa2\x02\x03AXX\xaa\x02\aAres.V1\xca\x02\aAres\\V1\xe2\x02\x13Ares\\V1\\GPBMetadata\xea\x02\bAres::V1b\x06proto3"
 
 var (
@@ -6753,7 +6884,7 @@ func file_ares_v1_ares_proto_rawDescGZIP() []byte {
 }
 
 var file_ares_v1_ares_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_ares_v1_ares_proto_msgTypes = make([]protoimpl.MessageInfo, 94)
+var file_ares_v1_ares_proto_msgTypes = make([]protoimpl.MessageInfo, 96)
 var file_ares_v1_ares_proto_goTypes = []any{
 	(AgentStatus)(0),                       // 0: ares.v1.AgentStatus
 	(*AdviseRequest)(nil),                  // 1: ares.v1.AdviseRequest
@@ -6848,11 +6979,13 @@ var file_ares_v1_ares_proto_goTypes = []any{
 	(*GetAgentRequest)(nil),                // 90: ares.v1.GetAgentRequest
 	(*RemoveAgentRequest)(nil),             // 91: ares.v1.RemoveAgentRequest
 	(*RemoveAgentResponse)(nil),            // 92: ares.v1.RemoveAgentResponse
-	nil,                                    // 93: ares.v1.DetectionSummary.CountsEntry
-	nil,                                    // 94: ares.v1.PurpleCoverage.CountsEntry
-	(*structpb.Struct)(nil),                // 95: google.protobuf.Struct
-	(*Consent)(nil),                        // 96: ares.v1.Consent
-	(*HostFacts)(nil),                      // 97: ares.v1.HostFacts
+	(*DispatchAgentJobRequest)(nil),        // 93: ares.v1.DispatchAgentJobRequest
+	(*DispatchAgentJobResponse)(nil),       // 94: ares.v1.DispatchAgentJobResponse
+	nil,                                    // 95: ares.v1.DetectionSummary.CountsEntry
+	nil,                                    // 96: ares.v1.PurpleCoverage.CountsEntry
+	(*structpb.Struct)(nil),                // 97: google.protobuf.Struct
+	(*Consent)(nil),                        // 98: ares.v1.Consent
+	(*HostFacts)(nil),                      // 99: ares.v1.HostFacts
 }
 var file_ares_v1_ares_proto_depIdxs = []int32{
 	3,  // 0: ares.v1.SettingsView.ai:type_name -> ares.v1.AISettings
@@ -6870,119 +7003,122 @@ var file_ares_v1_ares_proto_depIdxs = []int32{
 	32, // 12: ares.v1.SetScopeRequest.window:type_name -> ares.v1.Window
 	31, // 13: ares.v1.Denial.target:type_name -> ares.v1.Target
 	31, // 14: ares.v1.Result.target:type_name -> ares.v1.Target
-	95, // 15: ares.v1.Result.data:type_name -> google.protobuf.Struct
+	97, // 15: ares.v1.Result.data:type_name -> google.protobuf.Struct
 	31, // 16: ares.v1.DispatchJobRequest.targets:type_name -> ares.v1.Target
-	95, // 17: ares.v1.DispatchJobRequest.params:type_name -> google.protobuf.Struct
+	97, // 17: ares.v1.DispatchJobRequest.params:type_name -> google.protobuf.Struct
 	31, // 18: ares.v1.JobOutcome.allowed:type_name -> ares.v1.Target
 	47, // 19: ares.v1.JobOutcome.denied:type_name -> ares.v1.Denial
 	48, // 20: ares.v1.JobOutcome.results:type_name -> ares.v1.Result
 	54, // 21: ares.v1.ListJobsResponse.jobs:type_name -> ares.v1.JobSummary
-	95, // 22: ares.v1.Finding.data:type_name -> google.protobuf.Struct
+	97, // 22: ares.v1.Finding.data:type_name -> google.protobuf.Struct
 	56, // 23: ares.v1.ListFindingsResponse.findings:type_name -> ares.v1.Finding
 	60, // 24: ares.v1.GetAuditResponse.entries:type_name -> ares.v1.AuditEntry
 	65, // 25: ares.v1.DetectionSummary.techniques:type_name -> ares.v1.TechniqueStatus
-	93, // 26: ares.v1.DetectionSummary.counts:type_name -> ares.v1.DetectionSummary.CountsEntry
+	95, // 26: ares.v1.DetectionSummary.counts:type_name -> ares.v1.DetectionSummary.CountsEntry
 	68, // 27: ares.v1.AttackPath.steps:type_name -> ares.v1.PathStep
 	69, // 28: ares.v1.RiskPicture.paths:type_name -> ares.v1.AttackPath
-	94, // 29: ares.v1.PurpleCoverage.counts:type_name -> ares.v1.PurpleCoverage.CountsEntry
+	96, // 29: ares.v1.PurpleCoverage.counts:type_name -> ares.v1.PurpleCoverage.CountsEntry
 	73, // 30: ares.v1.PurpleTemplateSummary.coverage:type_name -> ares.v1.PurpleCoverage
 	74, // 31: ares.v1.PurpleTemplate.steps:type_name -> ares.v1.PurpleStep
 	73, // 32: ares.v1.PurpleTemplate.coverage:type_name -> ares.v1.PurpleCoverage
 	75, // 33: ares.v1.ListPurpleTemplatesResponse.templates:type_name -> ares.v1.PurpleTemplateSummary
-	96, // 34: ares.v1.MintAgentKeyRequest.consent:type_name -> ares.v1.Consent
-	96, // 35: ares.v1.AgentKeyView.consent:type_name -> ares.v1.Consent
+	98, // 34: ares.v1.MintAgentKeyRequest.consent:type_name -> ares.v1.Consent
+	98, // 35: ares.v1.AgentKeyView.consent:type_name -> ares.v1.Consent
 	85, // 36: ares.v1.ListAgentKeysResponse.keys:type_name -> ares.v1.AgentKeyView
 	0,  // 37: ares.v1.AgentView.status:type_name -> ares.v1.AgentStatus
-	97, // 38: ares.v1.AgentView.host:type_name -> ares.v1.HostFacts
-	96, // 39: ares.v1.AgentView.consent:type_name -> ares.v1.Consent
+	99, // 38: ares.v1.AgentView.host:type_name -> ares.v1.HostFacts
+	98, // 39: ares.v1.AgentView.consent:type_name -> ares.v1.Consent
 	88, // 40: ares.v1.ListAgentsResponse.agents:type_name -> ares.v1.AgentView
-	35, // 41: ares.v1.ControlPlane.ListModules:input_type -> ares.v1.ListModulesRequest
-	37, // 42: ares.v1.ControlPlane.CreateTenant:input_type -> ares.v1.CreateTenantRequest
-	38, // 43: ares.v1.ControlPlane.ListTenants:input_type -> ares.v1.ListTenantsRequest
-	40, // 44: ares.v1.ControlPlane.CreateEngagement:input_type -> ares.v1.CreateEngagementRequest
-	41, // 45: ares.v1.ControlPlane.ListEngagements:input_type -> ares.v1.ListEngagementsRequest
-	43, // 46: ares.v1.ControlPlane.GetEngagement:input_type -> ares.v1.GetEngagementRequest
-	44, // 47: ares.v1.ControlPlane.SetScope:input_type -> ares.v1.SetScopeRequest
-	45, // 48: ares.v1.ControlPlane.Authorize:input_type -> ares.v1.AuthorizeRequest
-	46, // 49: ares.v1.ControlPlane.Halt:input_type -> ares.v1.HaltRequest
-	49, // 50: ares.v1.ControlPlane.DispatchJob:input_type -> ares.v1.DispatchJobRequest
-	51, // 51: ares.v1.ControlPlane.GetJob:input_type -> ares.v1.GetJobRequest
-	53, // 52: ares.v1.ControlPlane.ListJobs:input_type -> ares.v1.ListJobsRequest
-	57, // 53: ares.v1.ControlPlane.ListFindings:input_type -> ares.v1.ListFindingsRequest
-	59, // 54: ares.v1.ControlPlane.SetFindingStatus:input_type -> ares.v1.SetFindingStatusRequest
-	61, // 55: ares.v1.ControlPlane.GetAudit:input_type -> ares.v1.GetAuditRequest
-	62, // 56: ares.v1.ControlPlane.GenerateReport:input_type -> ares.v1.GenerateReportRequest
-	67, // 57: ares.v1.ControlPlane.GetDetectionSummary:input_type -> ares.v1.GetDetectionSummaryRequest
-	72, // 58: ares.v1.ControlPlane.SetDetection:input_type -> ares.v1.SetDetectionRequest
-	71, // 59: ares.v1.ControlPlane.GetRiskPicture:input_type -> ares.v1.GetRiskPictureRequest
-	77, // 60: ares.v1.ControlPlane.ListPurpleTemplates:input_type -> ares.v1.ListPurpleTemplatesRequest
-	79, // 61: ares.v1.ControlPlane.GetPurpleTemplate:input_type -> ares.v1.GetPurpleTemplateRequest
-	1,  // 62: ares.v1.ControlPlane.Advise:input_type -> ares.v1.AdviseRequest
-	6,  // 63: ares.v1.ControlPlane.GetSettings:input_type -> ares.v1.GetSettingsRequest
-	8,  // 64: ares.v1.ControlPlane.UpdateSettings:input_type -> ares.v1.UpdateSettingsRequest
-	9,  // 65: ares.v1.ControlPlane.TestAIProvider:input_type -> ares.v1.TestAIProviderRequest
-	12, // 66: ares.v1.ControlPlane.GetSetupStatus:input_type -> ares.v1.GetSetupStatusRequest
-	14, // 67: ares.v1.ControlPlane.TestDatabaseConnection:input_type -> ares.v1.TestDatabaseConnectionRequest
-	17, // 68: ares.v1.ControlPlane.CommitSetup:input_type -> ares.v1.CommitSetupRequest
-	20, // 69: ares.v1.ControlPlane.Login:input_type -> ares.v1.LoginRequest
-	22, // 70: ares.v1.ControlPlane.Logout:input_type -> ares.v1.LogoutRequest
-	24, // 71: ares.v1.ControlPlane.CurrentUser:input_type -> ares.v1.CurrentUserRequest
-	25, // 72: ares.v1.ControlPlane.ListUsers:input_type -> ares.v1.ListUsersRequest
-	27, // 73: ares.v1.ControlPlane.CreateUser:input_type -> ares.v1.CreateUserRequest
-	28, // 74: ares.v1.ControlPlane.SetUserRole:input_type -> ares.v1.SetUserRoleRequest
-	29, // 75: ares.v1.ControlPlane.SetUserDisabled:input_type -> ares.v1.SetUserDisabledRequest
-	80, // 76: ares.v1.ControlPlane.MintAgentKey:input_type -> ares.v1.MintAgentKeyRequest
-	82, // 77: ares.v1.ControlPlane.CancelAgentKey:input_type -> ares.v1.CancelAgentKeyRequest
-	84, // 78: ares.v1.ControlPlane.ListAgentKeys:input_type -> ares.v1.ListAgentKeysRequest
-	87, // 79: ares.v1.ControlPlane.ListAgents:input_type -> ares.v1.ListAgentsRequest
-	90, // 80: ares.v1.ControlPlane.GetAgent:input_type -> ares.v1.GetAgentRequest
-	91, // 81: ares.v1.ControlPlane.RemoveAgent:input_type -> ares.v1.RemoveAgentRequest
-	36, // 82: ares.v1.ControlPlane.ListModules:output_type -> ares.v1.ListModulesResponse
-	30, // 83: ares.v1.ControlPlane.CreateTenant:output_type -> ares.v1.Tenant
-	39, // 84: ares.v1.ControlPlane.ListTenants:output_type -> ares.v1.ListTenantsResponse
-	34, // 85: ares.v1.ControlPlane.CreateEngagement:output_type -> ares.v1.Engagement
-	42, // 86: ares.v1.ControlPlane.ListEngagements:output_type -> ares.v1.ListEngagementsResponse
-	34, // 87: ares.v1.ControlPlane.GetEngagement:output_type -> ares.v1.Engagement
-	34, // 88: ares.v1.ControlPlane.SetScope:output_type -> ares.v1.Engagement
-	34, // 89: ares.v1.ControlPlane.Authorize:output_type -> ares.v1.Engagement
-	34, // 90: ares.v1.ControlPlane.Halt:output_type -> ares.v1.Engagement
-	50, // 91: ares.v1.ControlPlane.DispatchJob:output_type -> ares.v1.DispatchJobResponse
-	52, // 92: ares.v1.ControlPlane.GetJob:output_type -> ares.v1.JobOutcome
-	55, // 93: ares.v1.ControlPlane.ListJobs:output_type -> ares.v1.ListJobsResponse
-	58, // 94: ares.v1.ControlPlane.ListFindings:output_type -> ares.v1.ListFindingsResponse
-	56, // 95: ares.v1.ControlPlane.SetFindingStatus:output_type -> ares.v1.Finding
-	64, // 96: ares.v1.ControlPlane.GetAudit:output_type -> ares.v1.GetAuditResponse
-	63, // 97: ares.v1.ControlPlane.GenerateReport:output_type -> ares.v1.GenerateReportResponse
-	66, // 98: ares.v1.ControlPlane.GetDetectionSummary:output_type -> ares.v1.DetectionSummary
-	66, // 99: ares.v1.ControlPlane.SetDetection:output_type -> ares.v1.DetectionSummary
-	70, // 100: ares.v1.ControlPlane.GetRiskPicture:output_type -> ares.v1.RiskPicture
-	78, // 101: ares.v1.ControlPlane.ListPurpleTemplates:output_type -> ares.v1.ListPurpleTemplatesResponse
-	76, // 102: ares.v1.ControlPlane.GetPurpleTemplate:output_type -> ares.v1.PurpleTemplate
-	2,  // 103: ares.v1.ControlPlane.Advise:output_type -> ares.v1.AdviseResponse
-	5,  // 104: ares.v1.ControlPlane.GetSettings:output_type -> ares.v1.SettingsView
-	5,  // 105: ares.v1.ControlPlane.UpdateSettings:output_type -> ares.v1.SettingsView
-	10, // 106: ares.v1.ControlPlane.TestAIProvider:output_type -> ares.v1.TestAIProviderResponse
-	13, // 107: ares.v1.ControlPlane.GetSetupStatus:output_type -> ares.v1.SetupStatus
-	15, // 108: ares.v1.ControlPlane.TestDatabaseConnection:output_type -> ares.v1.TestDatabaseConnectionResponse
-	18, // 109: ares.v1.ControlPlane.CommitSetup:output_type -> ares.v1.CommitSetupResponse
-	21, // 110: ares.v1.ControlPlane.Login:output_type -> ares.v1.LoginResponse
-	23, // 111: ares.v1.ControlPlane.Logout:output_type -> ares.v1.LogoutResponse
-	19, // 112: ares.v1.ControlPlane.CurrentUser:output_type -> ares.v1.UserInfo
-	26, // 113: ares.v1.ControlPlane.ListUsers:output_type -> ares.v1.ListUsersResponse
-	19, // 114: ares.v1.ControlPlane.CreateUser:output_type -> ares.v1.UserInfo
-	19, // 115: ares.v1.ControlPlane.SetUserRole:output_type -> ares.v1.UserInfo
-	19, // 116: ares.v1.ControlPlane.SetUserDisabled:output_type -> ares.v1.UserInfo
-	81, // 117: ares.v1.ControlPlane.MintAgentKey:output_type -> ares.v1.MintAgentKeyResponse
-	83, // 118: ares.v1.ControlPlane.CancelAgentKey:output_type -> ares.v1.CancelAgentKeyResponse
-	86, // 119: ares.v1.ControlPlane.ListAgentKeys:output_type -> ares.v1.ListAgentKeysResponse
-	89, // 120: ares.v1.ControlPlane.ListAgents:output_type -> ares.v1.ListAgentsResponse
-	88, // 121: ares.v1.ControlPlane.GetAgent:output_type -> ares.v1.AgentView
-	92, // 122: ares.v1.ControlPlane.RemoveAgent:output_type -> ares.v1.RemoveAgentResponse
-	82, // [82:123] is the sub-list for method output_type
-	41, // [41:82] is the sub-list for method input_type
-	41, // [41:41] is the sub-list for extension type_name
-	41, // [41:41] is the sub-list for extension extendee
-	0,  // [0:41] is the sub-list for field type_name
+	31, // 41: ares.v1.DispatchAgentJobRequest.targets:type_name -> ares.v1.Target
+	35, // 42: ares.v1.ControlPlane.ListModules:input_type -> ares.v1.ListModulesRequest
+	37, // 43: ares.v1.ControlPlane.CreateTenant:input_type -> ares.v1.CreateTenantRequest
+	38, // 44: ares.v1.ControlPlane.ListTenants:input_type -> ares.v1.ListTenantsRequest
+	40, // 45: ares.v1.ControlPlane.CreateEngagement:input_type -> ares.v1.CreateEngagementRequest
+	41, // 46: ares.v1.ControlPlane.ListEngagements:input_type -> ares.v1.ListEngagementsRequest
+	43, // 47: ares.v1.ControlPlane.GetEngagement:input_type -> ares.v1.GetEngagementRequest
+	44, // 48: ares.v1.ControlPlane.SetScope:input_type -> ares.v1.SetScopeRequest
+	45, // 49: ares.v1.ControlPlane.Authorize:input_type -> ares.v1.AuthorizeRequest
+	46, // 50: ares.v1.ControlPlane.Halt:input_type -> ares.v1.HaltRequest
+	49, // 51: ares.v1.ControlPlane.DispatchJob:input_type -> ares.v1.DispatchJobRequest
+	51, // 52: ares.v1.ControlPlane.GetJob:input_type -> ares.v1.GetJobRequest
+	53, // 53: ares.v1.ControlPlane.ListJobs:input_type -> ares.v1.ListJobsRequest
+	57, // 54: ares.v1.ControlPlane.ListFindings:input_type -> ares.v1.ListFindingsRequest
+	59, // 55: ares.v1.ControlPlane.SetFindingStatus:input_type -> ares.v1.SetFindingStatusRequest
+	61, // 56: ares.v1.ControlPlane.GetAudit:input_type -> ares.v1.GetAuditRequest
+	62, // 57: ares.v1.ControlPlane.GenerateReport:input_type -> ares.v1.GenerateReportRequest
+	67, // 58: ares.v1.ControlPlane.GetDetectionSummary:input_type -> ares.v1.GetDetectionSummaryRequest
+	72, // 59: ares.v1.ControlPlane.SetDetection:input_type -> ares.v1.SetDetectionRequest
+	71, // 60: ares.v1.ControlPlane.GetRiskPicture:input_type -> ares.v1.GetRiskPictureRequest
+	77, // 61: ares.v1.ControlPlane.ListPurpleTemplates:input_type -> ares.v1.ListPurpleTemplatesRequest
+	79, // 62: ares.v1.ControlPlane.GetPurpleTemplate:input_type -> ares.v1.GetPurpleTemplateRequest
+	1,  // 63: ares.v1.ControlPlane.Advise:input_type -> ares.v1.AdviseRequest
+	6,  // 64: ares.v1.ControlPlane.GetSettings:input_type -> ares.v1.GetSettingsRequest
+	8,  // 65: ares.v1.ControlPlane.UpdateSettings:input_type -> ares.v1.UpdateSettingsRequest
+	9,  // 66: ares.v1.ControlPlane.TestAIProvider:input_type -> ares.v1.TestAIProviderRequest
+	12, // 67: ares.v1.ControlPlane.GetSetupStatus:input_type -> ares.v1.GetSetupStatusRequest
+	14, // 68: ares.v1.ControlPlane.TestDatabaseConnection:input_type -> ares.v1.TestDatabaseConnectionRequest
+	17, // 69: ares.v1.ControlPlane.CommitSetup:input_type -> ares.v1.CommitSetupRequest
+	20, // 70: ares.v1.ControlPlane.Login:input_type -> ares.v1.LoginRequest
+	22, // 71: ares.v1.ControlPlane.Logout:input_type -> ares.v1.LogoutRequest
+	24, // 72: ares.v1.ControlPlane.CurrentUser:input_type -> ares.v1.CurrentUserRequest
+	25, // 73: ares.v1.ControlPlane.ListUsers:input_type -> ares.v1.ListUsersRequest
+	27, // 74: ares.v1.ControlPlane.CreateUser:input_type -> ares.v1.CreateUserRequest
+	28, // 75: ares.v1.ControlPlane.SetUserRole:input_type -> ares.v1.SetUserRoleRequest
+	29, // 76: ares.v1.ControlPlane.SetUserDisabled:input_type -> ares.v1.SetUserDisabledRequest
+	80, // 77: ares.v1.ControlPlane.MintAgentKey:input_type -> ares.v1.MintAgentKeyRequest
+	82, // 78: ares.v1.ControlPlane.CancelAgentKey:input_type -> ares.v1.CancelAgentKeyRequest
+	84, // 79: ares.v1.ControlPlane.ListAgentKeys:input_type -> ares.v1.ListAgentKeysRequest
+	87, // 80: ares.v1.ControlPlane.ListAgents:input_type -> ares.v1.ListAgentsRequest
+	90, // 81: ares.v1.ControlPlane.GetAgent:input_type -> ares.v1.GetAgentRequest
+	91, // 82: ares.v1.ControlPlane.RemoveAgent:input_type -> ares.v1.RemoveAgentRequest
+	93, // 83: ares.v1.ControlPlane.DispatchAgentJob:input_type -> ares.v1.DispatchAgentJobRequest
+	36, // 84: ares.v1.ControlPlane.ListModules:output_type -> ares.v1.ListModulesResponse
+	30, // 85: ares.v1.ControlPlane.CreateTenant:output_type -> ares.v1.Tenant
+	39, // 86: ares.v1.ControlPlane.ListTenants:output_type -> ares.v1.ListTenantsResponse
+	34, // 87: ares.v1.ControlPlane.CreateEngagement:output_type -> ares.v1.Engagement
+	42, // 88: ares.v1.ControlPlane.ListEngagements:output_type -> ares.v1.ListEngagementsResponse
+	34, // 89: ares.v1.ControlPlane.GetEngagement:output_type -> ares.v1.Engagement
+	34, // 90: ares.v1.ControlPlane.SetScope:output_type -> ares.v1.Engagement
+	34, // 91: ares.v1.ControlPlane.Authorize:output_type -> ares.v1.Engagement
+	34, // 92: ares.v1.ControlPlane.Halt:output_type -> ares.v1.Engagement
+	50, // 93: ares.v1.ControlPlane.DispatchJob:output_type -> ares.v1.DispatchJobResponse
+	52, // 94: ares.v1.ControlPlane.GetJob:output_type -> ares.v1.JobOutcome
+	55, // 95: ares.v1.ControlPlane.ListJobs:output_type -> ares.v1.ListJobsResponse
+	58, // 96: ares.v1.ControlPlane.ListFindings:output_type -> ares.v1.ListFindingsResponse
+	56, // 97: ares.v1.ControlPlane.SetFindingStatus:output_type -> ares.v1.Finding
+	64, // 98: ares.v1.ControlPlane.GetAudit:output_type -> ares.v1.GetAuditResponse
+	63, // 99: ares.v1.ControlPlane.GenerateReport:output_type -> ares.v1.GenerateReportResponse
+	66, // 100: ares.v1.ControlPlane.GetDetectionSummary:output_type -> ares.v1.DetectionSummary
+	66, // 101: ares.v1.ControlPlane.SetDetection:output_type -> ares.v1.DetectionSummary
+	70, // 102: ares.v1.ControlPlane.GetRiskPicture:output_type -> ares.v1.RiskPicture
+	78, // 103: ares.v1.ControlPlane.ListPurpleTemplates:output_type -> ares.v1.ListPurpleTemplatesResponse
+	76, // 104: ares.v1.ControlPlane.GetPurpleTemplate:output_type -> ares.v1.PurpleTemplate
+	2,  // 105: ares.v1.ControlPlane.Advise:output_type -> ares.v1.AdviseResponse
+	5,  // 106: ares.v1.ControlPlane.GetSettings:output_type -> ares.v1.SettingsView
+	5,  // 107: ares.v1.ControlPlane.UpdateSettings:output_type -> ares.v1.SettingsView
+	10, // 108: ares.v1.ControlPlane.TestAIProvider:output_type -> ares.v1.TestAIProviderResponse
+	13, // 109: ares.v1.ControlPlane.GetSetupStatus:output_type -> ares.v1.SetupStatus
+	15, // 110: ares.v1.ControlPlane.TestDatabaseConnection:output_type -> ares.v1.TestDatabaseConnectionResponse
+	18, // 111: ares.v1.ControlPlane.CommitSetup:output_type -> ares.v1.CommitSetupResponse
+	21, // 112: ares.v1.ControlPlane.Login:output_type -> ares.v1.LoginResponse
+	23, // 113: ares.v1.ControlPlane.Logout:output_type -> ares.v1.LogoutResponse
+	19, // 114: ares.v1.ControlPlane.CurrentUser:output_type -> ares.v1.UserInfo
+	26, // 115: ares.v1.ControlPlane.ListUsers:output_type -> ares.v1.ListUsersResponse
+	19, // 116: ares.v1.ControlPlane.CreateUser:output_type -> ares.v1.UserInfo
+	19, // 117: ares.v1.ControlPlane.SetUserRole:output_type -> ares.v1.UserInfo
+	19, // 118: ares.v1.ControlPlane.SetUserDisabled:output_type -> ares.v1.UserInfo
+	81, // 119: ares.v1.ControlPlane.MintAgentKey:output_type -> ares.v1.MintAgentKeyResponse
+	83, // 120: ares.v1.ControlPlane.CancelAgentKey:output_type -> ares.v1.CancelAgentKeyResponse
+	86, // 121: ares.v1.ControlPlane.ListAgentKeys:output_type -> ares.v1.ListAgentKeysResponse
+	89, // 122: ares.v1.ControlPlane.ListAgents:output_type -> ares.v1.ListAgentsResponse
+	88, // 123: ares.v1.ControlPlane.GetAgent:output_type -> ares.v1.AgentView
+	92, // 124: ares.v1.ControlPlane.RemoveAgent:output_type -> ares.v1.RemoveAgentResponse
+	94, // 125: ares.v1.ControlPlane.DispatchAgentJob:output_type -> ares.v1.DispatchAgentJobResponse
+	84, // [84:126] is the sub-list for method output_type
+	42, // [42:84] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_ares_v1_ares_proto_init() }
@@ -6997,7 +7133,7 @@ func file_ares_v1_ares_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ares_v1_ares_proto_rawDesc), len(file_ares_v1_ares_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   94,
+			NumMessages:   96,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
