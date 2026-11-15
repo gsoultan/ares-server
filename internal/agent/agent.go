@@ -38,9 +38,13 @@ import (
 // so the window is deliberately short.
 const DefaultEnrollTokenTTL = 1 * time.Hour
 
-// StaleAfter is how long without a heartbeat before an agent is considered
-// stale in the operator UI. It does not revoke the agent; it only flags it.
-const StaleAfter = 2 * time.Minute
+// Heartbeat is the agent's check-in cadence. StaleAfter is how long without a
+// heartbeat before an agent is shown as "not heard from" in the operator UI
+// (ten missed 30s beats). It does not revoke the agent; it only flags it.
+const (
+	HeartbeatEvery = 30 * time.Second
+	StaleAfter     = 5 * time.Minute
+)
 
 // State is an agent's lifecycle state.
 type State string
@@ -58,11 +62,35 @@ const (
 // shown on the operator's "Agents" view so it is always clear what is deployed
 // where. It carries no scan data.
 type HostFacts struct {
-	Hostname     string   `json:"hostname"`
-	OS           string   `json:"os"`
-	Arch         string   `json:"arch"`
-	AgentVersion string   `json:"agentVersion"`
+	Hostname     string `json:"hostname"`
+	OS           string `json:"os"`
+	Arch         string `json:"arch"`
+	AgentVersion string `json:"agentVersion"`
+	// IP is the agent's own interface address, shown in the UI. SegmentCIDRs is
+	// the segment(s) it sits on. Both are the agent's own context — no scan data.
+	IP           string   `json:"ip,omitempty"`
 	SegmentCIDRs []string `json:"segmentCidrs,omitempty"`
+}
+
+// Consent is the required record of the host owner's permission for an agent,
+// captured when the operator mints the install key (the "Add an agent —
+// permission" step) and carried for the agent's whole life. The agent is
+// transparent by design: the owner knows, and this record shows on the agent,
+// in the activity log, and in the report.
+type Consent struct {
+	Who                 string    `json:"who"`                           // who gave permission (name/role)
+	How                 string    `json:"how"`                           // how it was given (e.g. "signed authorization letter")
+	AuthFileFingerprint string    `json:"authFileFingerprint,omitempty"` // hash of the attached authorization document
+	RecordedBy          string    `json:"recordedBy"`                    // operator account that recorded it
+	EndsAt              time.Time `json:"endsAt,omitempty"`              // authorization end
+	At                  time.Time `json:"at"`
+}
+
+// Valid reports whether a consent record carries the minimum: who agreed, how,
+// and who recorded it. Enrollment requires it — an agent is never minted without
+// a permission record.
+func (c Consent) Valid() bool {
+	return c.Who != "" && c.How != "" && c.RecordedBy != ""
 }
 
 // Agent is the durable record of one enrolled agent, bound to exactly one
@@ -76,14 +104,44 @@ type Agent struct {
 	PublicKey    []byte    `json:"publicKey"`
 	// Capabilities is the per-agent allow-list: the only capabilities the agent
 	// may run. Anything off this list is refused server-side and agent-side.
-	Capabilities []string  `json:"capabilities"`
-	EnrolledAt   time.Time `json:"enrolledAt"`
-	LastSeen     time.Time `json:"lastSeen"`
-	RevokedAt    time.Time `json:"revokedAt,omitempty"`
+	Capabilities []string `json:"capabilities"`
+	// Consent is the host owner's permission record, required to enroll.
+	Consent Consent `json:"consent"`
+	// CurrentCapability names the capability the agent is running right now, so
+	// the UI can show "running a check"; empty when idle.
+	CurrentCapability string    `json:"currentCapability,omitempty"`
+	EnrolledAt        time.Time `json:"enrolledAt"`
+	LastSeen          time.Time `json:"lastSeen"`
+	RevokedAt         time.Time `json:"revokedAt,omitempty"`
+}
+
+// Status is the agent's display status for the UI, derived from its state, its
+// current activity, and the heartbeat window.
+type Status string
+
+const (
+	StatusConnected    Status = "connected"      // healthy, idle
+	StatusRunningCheck Status = "running_check"  // a capability is in flight
+	StatusNotHeardFrom Status = "not_heard_from" // missed the heartbeat window
+	StatusRemoved      Status = "removed"        // revoked / removed
+)
+
+// Status returns the display status at time now.
+func (a *Agent) StatusAt(now time.Time) Status {
+	if a.State != StateActive {
+		return StatusRemoved
+	}
+	if now.Sub(a.LastSeen) > StaleAfter {
+		return StatusNotHeardFrom
+	}
+	if a.CurrentCapability != "" {
+		return StatusRunningCheck
+	}
+	return StatusConnected
 }
 
 // Stale reports whether the agent has missed the heartbeat window. A revoked
-// agent is never "stale" — it is revoked.
+// agent is never "stale" — it is removed.
 func (a *Agent) Stale(now time.Time) bool {
 	if a.State != StateActive {
 		return false
@@ -94,14 +152,26 @@ func (a *Agent) Stale(now time.Time) bool {
 // EnrollToken is a one-time, engagement-scoped enrollment token. The raw token
 // is returned to the operator once; the store keeps only its hash.
 type EnrollToken struct {
-	TenantID     string    `json:"tenantId"`
-	EngagementID string    `json:"engagementId"`
-	Capabilities []string  `json:"capabilities"`
-	CreatedAt    time.Time `json:"createdAt"`
-	ExpiresAt    time.Time `json:"expiresAt"`
-	// Redeemed is set when the token is spent, so it can never enroll a second
-	// agent even within its validity window.
-	Redeemed bool `json:"redeemed"`
+	// ID identifies the key for the UI's "unused install keys" list and for
+	// Cancel; it is not the secret (the raw key is returned once at mint).
+	ID           string   `json:"id"`
+	TenantID     string   `json:"tenantId"`
+	EngagementID string   `json:"engagementId"`
+	Capabilities []string `json:"capabilities"`
+	// Consent is the permission record carried onto the enrolled agent.
+	Consent   Consent   `json:"consent"`
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	// Redeemed is set when the key is spent, so it can never enroll a second
+	// agent even within its validity window. Cancelled is set if an operator
+	// cancels an unused key.
+	Redeemed  bool `json:"redeemed"`
+	Cancelled bool `json:"cancelled"`
+}
+
+// Usable reports whether the key can still enroll an agent at time now.
+func (t EnrollToken) Usable(now time.Time) bool {
+	return !t.Redeemed && !t.Cancelled && !t.Expired(now)
 }
 
 // Expired reports whether the token is past its expiry.
@@ -114,6 +184,8 @@ var (
 	ErrUnknownAgent   = errors.New("agent: unknown or revoked agent")
 	ErrNotAuthorized  = errors.New("agent: not authorized for this engagement")
 	ErrCapabilityGate = errors.New("agent: capability not on the agent's allow-list")
+	ErrConsentMissing = errors.New("agent: a host-owner permission record is required to enroll")
+	ErrUnknownKey     = errors.New("agent: unknown install key")
 )
 
 // EngagementGate reports whether an engagement is currently open to agent
@@ -129,6 +201,7 @@ type Registry struct {
 	agents      map[string]*Agent      // by agent id
 	credentials map[string]string      // credential hash -> agent id
 	tokens      map[string]EnrollToken // token hash -> token
+	tokensByID  map[string]string      // key id -> token hash (for list/cancel)
 	gate        EngagementGate
 	now         func() time.Time // injectable clock for tests
 }
@@ -140,6 +213,7 @@ func NewRegistry(gate EngagementGate) *Registry {
 		agents:      map[string]*Agent{},
 		credentials: map[string]string{},
 		tokens:      map[string]EnrollToken{},
+		tokensByID:  map[string]string{},
 		gate:        gate,
 		now:         time.Now,
 	}
@@ -152,29 +226,77 @@ func (r *Registry) engagementOpen(tenantID, engagementID string) bool {
 	return r.gate(tenantID, engagementID)
 }
 
-// MintEnrollToken creates a one-time enrollment token for an engagement and
-// returns the raw token (shown to the operator once). The engagement must be
-// open. The capabilities become the enrolled agent's allow-list.
-func (r *Registry) MintEnrollToken(tenantID, engagementID string, capabilities []string) (string, error) {
+// MintEnrollToken creates a one-time install key for an engagement and returns
+// the key id and the raw key (the key is shown to the operator once). The
+// engagement must be open and a valid host-owner consent record is required —
+// an agent is never created without recorded permission. The capabilities
+// become the enrolled agent's allow-list.
+func (r *Registry) MintEnrollToken(tenantID, engagementID string, capabilities []string, consent Consent) (id, raw string, err error) {
 	if !r.engagementOpen(tenantID, engagementID) {
-		return "", ErrNotAuthorized
+		return "", "", ErrNotAuthorized
 	}
-	raw, err := newSecret()
+	if !consent.Valid() {
+		return "", "", ErrConsentMissing
+	}
+	raw, err = newSecret()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	now := r.now()
+	if consent.At.IsZero() {
+		consent.At = now
+	}
 	tok := EnrollToken{
+		ID:           uuid.NewV7(),
 		TenantID:     tenantID,
 		EngagementID: engagementID,
 		Capabilities: append([]string(nil), capabilities...),
+		Consent:      consent,
 		CreatedAt:    now,
 		ExpiresAt:    now.Add(DefaultEnrollTokenTTL),
 	}
+	th := hashSecret(raw)
 	r.mu.Lock()
-	r.tokens[hashSecret(raw)] = tok
+	r.tokens[th] = tok
+	r.tokensByID[tok.ID] = th
 	r.mu.Unlock()
-	return raw, nil
+	return tok.ID, raw, nil
+}
+
+// CancelEnrollToken cancels an unused install key by id, so the UI's "unused
+// install keys" list can withdraw one before it is redeemed. Cancelling a
+// redeemed or unknown key is reported; cancelling an already-cancelled key is a
+// no-op.
+func (r *Registry) CancelEnrollToken(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	th, ok := r.tokensByID[id]
+	if !ok {
+		return ErrUnknownKey
+	}
+	tok := r.tokens[th]
+	if tok.Redeemed {
+		return ErrUnknownKey // already spent — nothing to cancel
+	}
+	tok.Cancelled = true
+	r.tokens[th] = tok
+	return nil
+}
+
+// ListEnrollTokens returns the unused (usable) install keys for an engagement,
+// for the operator's "unused install keys" view. The raw key is never returned —
+// only its metadata.
+func (r *Registry) ListEnrollTokens(tenantID, engagementID string) []EnrollToken {
+	now := r.now()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []EnrollToken
+	for _, tok := range r.tokens {
+		if tok.TenantID == tenantID && tok.EngagementID == engagementID && tok.Usable(now) {
+			out = append(out, tok)
+		}
+	}
+	return out
 }
 
 // Enroll redeems an enrollment token and registers a new agent. It returns the
@@ -188,7 +310,7 @@ func (r *Registry) Enroll(rawToken string, pubKey []byte, host HostFacts) (*Agen
 
 	th := hashSecret(rawToken)
 	tok, ok := r.tokens[th]
-	if !ok || tok.Redeemed || tok.Expired(now) {
+	if !ok || !tok.Usable(now) {
 		return nil, "", ErrInvalidToken
 	}
 	if !r.engagementOpen(tok.TenantID, tok.EngagementID) {
@@ -207,6 +329,7 @@ func (r *Registry) Enroll(rawToken string, pubKey []byte, host HostFacts) (*Agen
 		Host:         host,
 		PublicKey:    append([]byte(nil), pubKey...),
 		Capabilities: append([]string(nil), tok.Capabilities...),
+		Consent:      tok.Consent,
 		EnrolledAt:   now,
 		LastSeen:     now,
 	}
@@ -271,6 +394,16 @@ func (r *Registry) AuthorizeCapability(agentID, capability string) error {
 		}
 	}
 	return ErrCapabilityGate
+}
+
+// SetCurrentCapability records what the agent is running right now (empty when
+// idle), so the UI can show "running a check". It does not change authorization.
+func (r *Registry) SetCurrentCapability(agentID, capability string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if a, ok := r.agents[agentID]; ok {
+		a.CurrentCapability = capability
+	}
 }
 
 // Revoke revokes an agent (operator action, engagement halt, or uninstall). Its

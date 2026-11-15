@@ -46,14 +46,39 @@ service AgentService {
   rpc Deregister(DeregisterRequest) returns (DeregisterResponse);
 }
 
+// Operator-facing agent management is served on the ControlPlane service (in
+// ares.proto), not here, because it is authenticated by the operator session,
+// not the agent credential. Planned additions (added in a follow-up once the
+// shared ControlPlane contract change is agreed):
+//   MintAgentKey(engagement, capabilities, consent) -> {key_id, install_key}
+//   CancelAgentKey(key_id)
+//   ListAgentKeys(engagement) -> unused install keys
+//   ListAgents(engagement) -> agents with status / host / consent / activity
+//   RemoveAgent(agent_id)   -> revoke + self-uninstall on next contact
+// The internal/agent registry already implements all of these.
+
 message HostFacts {
   string hostname = 1;
   string os = 2;          // "linux", "windows", "darwin"
   string arch = 3;        // "amd64", "arm64"
   string agent_version = 4;
-  // Non-identifying network context the operator needs to see what segment the
-  // agent sits on (e.g. the agent's own interface CIDR). No scan data here.
+  // Non-identifying network context the operator needs to see what host and
+  // segment the agent sits on. No scan data here.
   repeated string segment_cidrs = 5;
+  string ip = 6;          // the agent's own primary interface address
+}
+
+// Consent is the required record of the host owner's permission for an agent,
+// captured by the operator when they mint the install key (the "Add an agent —
+// permission" step) and carried for the agent's whole life. The agent is
+// transparent: the owner knows, and this record shows on the agent, in the
+// activity log and in the report.
+message Consent {
+  string who = 1;                    // who gave permission (name/role)
+  string how = 2;                    // how it was given (e.g. "signed authorization letter")
+  string auth_file_fingerprint = 3;  // hash of the attached authorization document
+  string recorded_by = 4;            // operator account that recorded it
+  string ends_at = 5;                // RFC3339 authorization end
 }
 
 message EnrollRequest {

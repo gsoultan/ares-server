@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"runtime"
 
 	"github.com/gsoultan/ares-server/internal/agent"
@@ -17,6 +18,26 @@ import (
 
 func runtimeGOOS() string   { return runtime.GOOS }
 func runtimeGOARCH() string { return runtime.GOARCH }
+
+// primaryIP reports the agent's own primary non-loopback IPv4 address, shown to
+// the operator so it is clear which host and segment the agent sits on. It only
+// reads local interface addresses; it sends nothing.
+func primaryIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, a := range addrs {
+		ipnet, ok := a.(*net.IPNet)
+		if !ok || ipnet.IP.IsLoopback() {
+			continue
+		}
+		if v4 := ipnet.IP.To4(); v4 != nil {
+			return v4.String()
+		}
+	}
+	return ""
+}
 
 // EnrollResult is what the server returns on a successful Enroll: the durable
 // agent id, the scoped credential (stored only locally, never logged), the

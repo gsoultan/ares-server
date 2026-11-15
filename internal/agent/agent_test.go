@@ -14,9 +14,13 @@ import (
 
 func openGate(string, string) bool { return true }
 
+func testConsent() Consent {
+	return Consent{Who: "Owner, Acme IT", How: "signed authorization letter", RecordedBy: "op@acme"}
+}
+
 func mintAndEnroll(t *testing.T, r *Registry, tenant, eng string, caps []string) (*Agent, string) {
 	t.Helper()
-	tok, err := r.MintEnrollToken(tenant, eng, caps)
+	_, tok, err := r.MintEnrollToken(tenant, eng, caps, testConsent())
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
@@ -32,6 +36,9 @@ func TestEnrollBindsTenantEngagementAndCapabilities(t *testing.T) {
 	a, cred := mintAndEnroll(t, r, "t1", "e1", []string{"recon", "passivesniff"})
 	if a.TenantID != "t1" || a.EngagementID != "e1" {
 		t.Fatalf("agent not bound: %+v", a)
+	}
+	if !a.Consent.Valid() || a.Consent.RecordedBy != "op@acme" {
+		t.Fatalf("consent not carried onto agent: %+v", a.Consent)
 	}
 	if a.State != StateActive {
 		t.Fatalf("want active, got %s", a.State)
@@ -51,9 +58,36 @@ func TestEnrollBindsTenantEngagementAndCapabilities(t *testing.T) {
 	}
 }
 
+func TestEnrollRequiresConsent(t *testing.T) {
+	r := NewRegistry(openGate)
+	if _, _, err := r.MintEnrollToken("t1", "e1", nil, Consent{}); err != ErrConsentMissing {
+		t.Fatalf("mint without consent must fail, got %v", err)
+	}
+}
+
+func TestCancelAndListEnrollTokens(t *testing.T) {
+	r := NewRegistry(openGate)
+	id, raw, err := r.MintEnrollToken("t1", "e1", []string{"recon"}, testConsent())
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	if got := r.ListEnrollTokens("t1", "e1"); len(got) != 1 || got[0].ID != id {
+		t.Fatalf("want one usable key %s, got %+v", id, got)
+	}
+	if err := r.CancelEnrollToken(id); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	if got := r.ListEnrollTokens("t1", "e1"); len(got) != 0 {
+		t.Fatalf("cancelled key must not be listed, got %+v", got)
+	}
+	if _, _, err := r.Enroll(raw, nil, HostFacts{}); err != ErrInvalidToken {
+		t.Fatalf("cancelled key must not enroll, got %v", err)
+	}
+}
+
 func TestEnrollTokenIsSingleUse(t *testing.T) {
 	r := NewRegistry(openGate)
-	tok, err := r.MintEnrollToken("t1", "e1", nil)
+	_, tok, err := r.MintEnrollToken("t1", "e1", nil, testConsent())
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
@@ -69,7 +103,7 @@ func TestEnrollTokenExpires(t *testing.T) {
 	r := NewRegistry(openGate)
 	base := time.Now()
 	r.now = func() time.Time { return base }
-	tok, err := r.MintEnrollToken("t1", "e1", nil)
+	_, tok, err := r.MintEnrollToken("t1", "e1", nil, testConsent())
 	if err != nil {
 		t.Fatalf("mint: %v", err)
 	}
@@ -115,7 +149,7 @@ func TestClosedEngagementRefusesAgent(t *testing.T) {
 		t.Fatal("agent of a closed engagement must be told to stop")
 	}
 	// Minting a token for a closed engagement is refused too.
-	if _, err := r.MintEnrollToken("t1", "e1", nil); err != ErrNotAuthorized {
+	if _, _, err := r.MintEnrollToken("t1", "e1", nil, testConsent()); err != ErrNotAuthorized {
 		t.Fatalf("mint for closed engagement must fail, got %v", err)
 	}
 }

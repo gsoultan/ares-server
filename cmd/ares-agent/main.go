@@ -77,7 +77,7 @@ func usage() {
 	fmt.Fprint(os.Stderr, `ares-agent — the Ares authorized testing agent (transparent, not an implant)
 
 Usage:
-  ares-agent enroll   --server <url> --token <enrollment-token> [--proxy <url>] [--ca <file>] [--state <dir>]
+  ares-agent enroll   --server <url> --key <install-key> [--proxy <url>] [--trust-ca <file>] [--state <dir>]
   ares-agent run      [--state <dir>]
   ares-agent status   [--state <dir>]
   ares-agent uninstall [--state <dir>]
@@ -127,15 +127,15 @@ func runEnroll(args []string) error {
 	cfg := config{}
 	var token string
 	fs.StringVar(&cfg.ServerURL, "server", "", "ares-server HTTPS endpoint (may be a tunnel/CDN hostname)")
-	fs.StringVar(&token, "token", "", "one-time enrollment token")
+	fs.StringVar(&token, "key", "", "one-time install key (from the operator)")
 	fs.StringVar(&cfg.Proxy, "proxy", "", "explicit HTTP(S) proxy (else the system proxy is honored)")
-	fs.StringVar(&cfg.CAFile, "ca", "", "trust anchor for a TLS-inspecting proxy (optional)")
+	fs.StringVar(&cfg.CAFile, "trust-ca", "", "trust anchor for a TLS-inspecting proxy (optional)")
 	fs.StringVar(&cfg.StateDir, "state", defaultStateDir(), "agent state directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if cfg.ServerURL == "" || token == "" {
-		return errors.New("enroll requires --server and --token")
+		return errors.New("enroll requires --server and --key")
 	}
 
 	st, err := openState(cfg)
@@ -260,5 +260,6 @@ func collectHostFacts() agent.HostFacts {
 		OS:           runtimeGOOS(),
 		Arch:         runtimeGOARCH(),
 		AgentVersion: agentVersion,
+		IP:           primaryIP(),
 	}
 }
