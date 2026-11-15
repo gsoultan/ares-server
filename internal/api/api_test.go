@@ -12,8 +12,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	"github.com/gsoultan/ares-server/internal/queue"
 	"github.com/gsoultan/ares-server/internal/worker"
@@ -318,5 +320,37 @@ func TestRESTPurpleFlow(t *testing.T) {
 	w = do(t, h, "GET", "/api/engagements/"+eng.ID+"/purple/log4shell", "someone-else", nil)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("cross-tenant purple read: status %d, want 404", w.Code)
+	}
+}
+
+// A workspace-bound caller must not plant an engagement in another workspace by
+// naming it in the body, and must not list or create workspaces.
+func TestRESTBodyTenantIsBoundToSession(t *testing.T) {
+	store := engagement.NewMemStore()
+	other := store.CreateTenant("Other client")
+	s := New(store, module.NewRegistry(), queue.New(4), worker.NewMemOutcomes())
+	h := s.Routes()
+	member := auth.Session{UserID: "u1", TenantID: engagement.ResolveTenant(""), Role: auth.RoleMember}
+
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r = r.WithContext(auth.WithSession(r.Context(), member))
+		r.Header.Set(tenantHeader, member.TenantID)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := call("POST", "/api/engagements", `{"name":"x","tenantId":"`+other.ID+`"}`); w.Code != http.StatusForbidden {
+		t.Fatalf("cross-tenant create = %d, want 403", w.Code)
+	}
+	if len(store.List(other.ID)) != 0 {
+		t.Fatal("engagement was planted in another workspace")
+	}
+	if w := call("POST", "/api/tenants", `{"name":"mine"}`); w.Code != http.StatusForbidden {
+		t.Fatalf("member create tenant = %d, want 403", w.Code)
+	}
+	w := call("GET", "/api/tenants", "")
+	if strings.Contains(w.Body.String(), other.ID) {
+		t.Fatal("member can see another client's workspace")
 	}
 }

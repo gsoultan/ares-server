@@ -25,7 +25,7 @@ func authHandler(t *testing.T) (*Handler, *auth.Service) {
 }
 
 func asSession(sess auth.Session) context.Context {
-	return context.WithValue(context.Background(), sessionCtxKey{}, sess)
+	return auth.WithSession(context.Background(), sess)
 }
 
 func sessFor(t *testing.T, a *auth.Service, tenantID, email string, role auth.Role) auth.Session {

@@ -39,6 +39,11 @@ type Config struct {
 	Temperature float64
 	// Timeout bounds a single provider call (default 60s).
 	Timeout time.Duration
+	// RestrictPrivate refuses to connect to loopback, private, link-local and
+	// other internal addresses. It is set whenever the endpoint came from a
+	// workspace's settings rather than the operator's environment, so a tenant
+	// cannot point the server at its own internal network or cloud metadata.
+	RestrictPrivate bool
 }
 
 // Env var names. Keys are read only from the environment, never persisted.
