@@ -20,6 +20,7 @@ import (
 	"github.com/gsoultan/ares-server/internal/queue"
 	"github.com/gsoultan/ares-server/internal/uuid"
 	"github.com/gsoultan/ares/module"
+	"github.com/gsoultan/ares/remediation"
 )
 
 // proofProto converts the engine's structured proof into its wire form. A nil
@@ -262,4 +263,43 @@ func proofFilename(findingID, fingerprint string) string {
 		id = id[:12]
 	}
 	return "proof-" + id + "-" + short + ".json"
+}
+
+// remediationProto lifts the engine's structured remediation guidance onto the
+// typed wire field. It derives the guidance the same way the worker's enrichment
+// does (from the issue key, technique and the finding's own fix line), so the UI
+// gets first-class, per-platform fix steps and authoritative references without
+// re-parsing the untyped data payload. A finding with no guidance maps to nil.
+func remediationProto(r module.Result) *aresv1.Remediation {
+	issueKey, _ := r.Data["issueKey"].(string)
+	existingFix, _ := r.Data["remediation"].(string)
+	g := remediation.For(issueKey, r.Technique, existingFix)
+	out := &aresv1.Remediation{
+		Summary:    g.Summary,
+		Technique:  g.Technique,
+		Fix:        stepsProto(g.Fix),
+		Prevent:    stepsProto(g.Prevent),
+		Verify:     stepsProto(g.Verify),
+		Detect:     stepsProto(g.Detect),
+		References: append([]string(nil), g.References...),
+	}
+	for _, m := range g.Mitigations {
+		out.Mitigations = append(out.Mitigations, &aresv1.Mitigation{Id: m.ID, Name: m.Name})
+	}
+	if out.GetSummary() == "" && len(out.GetFix()) == 0 && len(out.GetPrevent()) == 0 &&
+		len(out.GetVerify()) == 0 && len(out.GetReferences()) == 0 {
+		return nil
+	}
+	return out
+}
+
+func stepsProto(steps []remediation.Step) []*aresv1.RemediationStep {
+	if len(steps) == 0 {
+		return nil
+	}
+	out := make([]*aresv1.RemediationStep, 0, len(steps))
+	for _, s := range steps {
+		out = append(out, &aresv1.RemediationStep{Text: s.Text, Code: s.Code, Lang: s.Lang})
+	}
+	return out
 }

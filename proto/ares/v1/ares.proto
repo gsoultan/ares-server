@@ -428,6 +428,35 @@ message ProofCheck {
   string job_id = 4;
 }
 
+// Remediation is the structured, first-class fix guidance every finding ships
+// (Ares doctrine, pillar 2). It mirrors the engine's remediation.Guidance so the
+// UI can render per-platform commands, and so "never fabricate — reference the
+// authoritative source" is enforceable by shape rather than by prose.
+message Remediation {
+  string summary = 1;
+  repeated RemediationStep fix = 2;     // the specific technical change to close it now
+  repeated RemediationStep prevent = 3; // the durable hardening that stops the class
+  repeated RemediationStep verify = 4;  // how to confirm it is closed; paired with the proof re-check
+  repeated RemediationStep detect = 5;  // the detection that should catch it
+  repeated Mitigation mitigations = 6;  // ATT&CK mitigations
+  repeated string references = 7;       // authoritative sources: advisory, CVE, CIS, OWASP
+  string technique = 8;
+}
+
+// RemediationStep is one actionable step: human text, an optional literal
+// command/config, and the platform/product it applies to so the UI can group
+// per-platform commands.
+message RemediationStep {
+  string text = 1;
+  string code = 2;     // the literal command or config, verbatim
+  string lang = 3;     // bash | nginx | apache | java | http | yaml | ... (platform/product qualifier)
+}
+
+message Mitigation {
+  string id = 1;   // ATT&CK mitigation id, e.g. M1050
+  string name = 2;
+}
+
 // Window bounds when testing is permitted.
 message Window {
   string start = 1; // RFC3339; empty means unbounded
@@ -523,6 +552,7 @@ message Result {
   string technique = 4;
   google.protobuf.Struct data = 5;
   Proof proof = 6; // structured evidence for a finding; nil for results with none
+  Remediation remediation = 7; // structured fix guidance; nil until enriched
 }
 
 message DispatchJobRequest {
@@ -595,6 +625,7 @@ message Finding {
   string status = 13; // open | in_progress | fixed
   Proof proof = 14; // structured, re-checkable evidence; nil for detection-only findings without one
   repeated ProofCheck rechecks = 15; // history of reproduce-on-demand runs, newest first
+  Remediation remediation = 16; // structured fix guidance, lifted from data.remediationDetail
 }
 message ListFindingsRequest {
   string tenant_id = 1;
