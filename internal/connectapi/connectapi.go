@@ -632,6 +632,7 @@ func outcomeProto(o worker.Outcome) *aresv1.JobOutcome {
 		if s, err := mapToStruct(r.Data); err == nil {
 			pr.Data = s
 		}
+		pr.Proof = proofProto(r.Proof)
 		jo.Results = append(jo.Results, pr)
 	}
 	return jo

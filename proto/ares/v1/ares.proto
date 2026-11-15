@@ -28,6 +28,15 @@ service ControlPlane {
   rpc ListFindings(ListFindingsRequest) returns (ListFindingsResponse);
   // SetFindingStatus records the operator's triage state for a finding.
   rpc SetFindingStatus(SetFindingStatusRequest) returns (Finding);
+  // RecheckFinding reproduces a finding's proof on demand: it dispatches the
+  // finding's narrowed re-check probe through the normal scope gate and returns
+  // the job it started. Reproduction is confirmed when that job emits a proof
+  // with the same claim.
+  rpc RecheckFinding(RecheckFindingRequest) returns (RecheckFindingResponse);
+  // GetProofArtifact returns a finding's proof as a downloadable JSON record
+  // plus the audit entry (seq and chain hash) that anchors its fingerprint, so a
+  // user can verify it offline.
+  rpc GetProofArtifact(GetProofArtifactRequest) returns (GetProofArtifactResponse);
   rpc GetAudit(GetAuditRequest) returns (GetAuditResponse);
   rpc GenerateReport(GenerateReportRequest) returns (GenerateReportResponse);
   rpc GetDetectionSummary(GetDetectionSummaryRequest) returns (DetectionSummary);
@@ -326,6 +335,99 @@ message Target {
   string url = 3;
 }
 
+// Proof is the structured, machine-readable evidence for a finding, mirroring
+// the engine's module.Proof. It lets the UI's per-finding Proof panel show what
+// Ares sent, what came back, the one-time token, the times and a sealed
+// fingerprint. Recording only — it describes an exchange that already happened.
+message Proof {
+  int32 v = 1;
+  // kind: callback | computed | differential | version | answer | detection-only
+  string kind = 2;
+  string summary = 3;       // the human sentence
+  string claim = 4;         // stable key of what is proven; same across re-checks
+  string token = 5;         // one-time code unique to this finding
+  Exchange sent = 6;        // what Ares sent
+  Exchange received = 7;    // what came back
+  Control control = 8;      // differential: the same request without the trick
+  Callback callback = 9;    // canary visit
+  Computed computed = 10;   // server-side calculation
+  VersionMatch version = 11;
+  Recheck recheck = 12;     // how to reproduce on demand
+  string fingerprint = 13;  // sha256 of the canonical record
+  // cleanup, where the check wrote an inert marker to the target and removed it
+  // again (e.g. the safe file-upload check), so the panel can show the marker
+  // was deleted and nothing was left behind.
+  Cleanup cleanup = 14;
+}
+
+message Exchange {
+  string at = 1; // RFC3339
+  string protocol = 2;
+  string method = 3;
+  string url = 4;
+  map<string, string> headers = 5; // allow-listed, secrets masked
+  string body = 6;                 // excerpt only
+  int32 status = 7;
+  int32 size = 8;
+  string title = 9;
+  string excerpt = 10; // the exact bytes that prove it
+}
+
+message Control {
+  Exchange sent = 1;
+  Exchange received = 2;
+}
+
+message Callback {
+  string channel = 1; // http | dns
+  string at = 2;      // RFC3339
+  int64 delay_ms = 3;
+  string source_ip = 4;
+  string target_ip = 5;
+  string method = 6;
+  string path = 7;
+  string host = 8;
+  string user_agent = 9;
+}
+
+message Computed {
+  string expression = 1;
+  string expected = 2;
+  string markers = 3;
+}
+
+message VersionMatch {
+  string found = 1;
+  string from = 2;
+  string range = 3;
+  string cve = 4;
+  string advisory = 5;
+  bool kev = 6;
+  string source = 7;
+  string as_of = 8;
+}
+
+message Recheck {
+  string module = 1;
+  Target target = 2;
+  string params = 3; // JSON
+}
+
+message Cleanup {
+  bool performed = 1;
+  string at = 2;     // RFC3339
+  string detail = 3; // what was removed
+}
+
+// ProofCheck is one re-check of a finding's proof: when it was reproduced,
+// whether the same claim came back, and the new fingerprint.
+message ProofCheck {
+  string at = 1;          // RFC3339
+  bool reproduced = 2;
+  string fingerprint = 3;
+  string job_id = 4;
+}
+
 // Window bounds when testing is permitted.
 message Window {
   string start = 1; // RFC3339; empty means unbounded
@@ -420,6 +522,7 @@ message Result {
   Target target = 3;
   string technique = 4;
   google.protobuf.Struct data = 5;
+  Proof proof = 6; // structured evidence for a finding; nil for results with none
 }
 
 message DispatchJobRequest {
@@ -490,6 +593,8 @@ message Finding {
   string last_seen = 11; // RFC3339, most recent run it appeared in
   bool still_present = 12; // false once a later run of the same module+target did not re-raise it
   string status = 13; // open | in_progress | fixed
+  Proof proof = 14; // structured, re-checkable evidence; nil for detection-only findings without one
+  repeated ProofCheck rechecks = 15; // history of reproduce-on-demand runs, newest first
 }
 message ListFindingsRequest {
   string tenant_id = 1;
@@ -503,6 +608,30 @@ message SetFindingStatusRequest {
   string id = 2;
   string status = 3; // open | in_progress | fixed
   string actor = 4;
+}
+
+message RecheckFindingRequest {
+  string tenant_id = 1;
+  string finding_id = 2;
+  string actor = 3;
+}
+message RecheckFindingResponse {
+  string job_id = 1;
+  string status = 2; // pending | running | done
+  bool rechecked = 3; // false when the finding carries no re-check probe
+  string message = 4; // why, when rechecked is false
+}
+
+message GetProofArtifactRequest {
+  string tenant_id = 1;
+  string finding_id = 2;
+}
+message GetProofArtifactResponse {
+  Proof proof = 1;
+  string filename = 2;     // proof-<finding>-<short fp>.json
+  bytes artifact = 3;      // the canonical JSON bytes the fingerprint is over
+  int32 audit_seq = 4;     // the proof-recorded audit entry's sequence
+  string audit_hash = 5;   // that entry's chain hash
 }
 
 message AuditEntry {
