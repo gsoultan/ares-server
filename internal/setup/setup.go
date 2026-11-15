@@ -186,10 +186,10 @@ type Service struct {
 	// both pass the "not initialized yet" check and each create a super-admin.
 	commitMu sync.Mutex
 	store    Store
-	auth    *auth.Service
-	tenants engagement.Store
-	dbPath  string
-	keyPath string
+	auth     *auth.Service
+	tenants  engagement.Store
+	dbPath   string
+	keyPath  string
 	// activeDriver is the backend the running server actually opened at start
 	// (file or postgres). It is the only committable driver, since the datastore
 	// is chosen at boot, not in the wizard. Empty means the file driver.
