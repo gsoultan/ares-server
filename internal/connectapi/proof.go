@@ -43,6 +43,7 @@ func proofProto(p *module.Proof) *aresv1.Proof {
 		Version:     versionProto(p.Version),
 		Recheck:     recheckProto(p.Recheck),
 		Fingerprint: p.Fingerprint,
+		Cleanup:     cleanupProto(p.Cleanup),
 	}
 	if p.Control != nil {
 		out.Control = &aresv1.Control{
@@ -302,4 +303,11 @@ func stepsProto(steps []remediation.Step) []*aresv1.RemediationStep {
 		out = append(out, &aresv1.RemediationStep{Text: s.Text, Code: s.Code, Lang: s.Lang})
 	}
 	return out
+}
+
+func cleanupProto(c *module.Cleanup) *aresv1.Cleanup {
+	if c == nil {
+		return nil
+	}
+	return &aresv1.Cleanup{Performed: c.Performed, At: rfc(c.At), Detail: c.Detail}
 }
