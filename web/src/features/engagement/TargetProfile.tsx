@@ -211,7 +211,7 @@ function ProfileView({
           <EmptyState title="No clues were recorded" />
         ) : (
           <Table.ScrollContainer minWidth={560}>
-            <Table>
+            <Table className="ares-stack">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Clue</Table.Th>
@@ -224,18 +224,18 @@ function ProfileView({
                   const conf = confidenceInfo(c.confidence);
                   return (
                     <Table.Tr key={i}>
-                      <Table.Td>
+                      <Table.Td data-primary>
                         <Text fw={600}>{c.value}</Text>
                         <Text size="sm" c="dimmed">
                           {clueKind(c.category)}
                         </Text>
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="How we know">
                         <Text c="dimmed" style={{ wordBreak: "break-word" }}>
                           {c.evidence}
                         </Text>
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="Confidence">
                         <ToneBadge tone={conf.tone}>{conf.label}</ToneBadge>
                       </Table.Td>
                     </Table.Tr>

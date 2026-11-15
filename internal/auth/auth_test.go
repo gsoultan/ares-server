@@ -154,3 +154,22 @@ func TestUnknownTokenRejected(t *testing.T) {
 		t.Errorf("empty token err = %v", err)
 	}
 }
+
+func TestHashPasswordForDevSeedSkipsLengthPolicyOnly(t *testing.T) {
+	if _, err := HashPassword("admin"); err == nil {
+		t.Fatal("HashPassword must keep enforcing the minimum length")
+	}
+	h, err := HashPasswordForDevSeed("admin")
+	if err != nil {
+		t.Fatalf("HashPasswordForDevSeed: %v", err)
+	}
+	if ok, err := VerifyPassword(h, "admin"); err != nil || !ok {
+		t.Fatalf("dev-seed hash must verify: ok=%v err=%v", ok, err)
+	}
+	if ok, _ := VerifyPassword(h, "wrong"); ok {
+		t.Fatal("dev-seed hash must reject a wrong password")
+	}
+	if _, err := HashPasswordForDevSeed(""); err == nil {
+		t.Fatal("an empty password must still be refused")
+	}
+}

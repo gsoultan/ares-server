@@ -380,7 +380,7 @@ function Workbench({ id, status }: { id: string; status: string }) {
           />
         ) : (
           <Table.ScrollContainer minWidth={760}>
-            <Table>
+            <Table className="ares-stack">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>File</Table.Th>
@@ -404,7 +404,7 @@ function Workbench({ id, status }: { id: string; status: string }) {
                   return (
                     <Fragment key={`${job.jobId}-${i}`}>
                     <Table.Tr style={bundle ? { borderBottom: 0 } : undefined}>
-                      <Table.Td>
+                      <Table.Td data-primary>
                         <Text fw={600} style={{ wordBreak: "break-word" }}>
                           {str(d["name"])}
                         </Text>
@@ -412,8 +412,8 @@ function Workbench({ id, status }: { id: string; status: string }) {
                           {kind}
                         </Text>
                       </Table.Td>
-                      <Table.Td style={{ whiteSpace: "nowrap" }}>{formatBytes(num(d["size"]))}</Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="Size" style={{ whiteSpace: "nowrap" }}>{formatBytes(num(d["size"]))}</Table.Td>
+                      <Table.Td data-label="Fingerprint">
                         <CopyButton value={sha}>
                           {({ copied, copy }) => (
                             <Tooltip label={copied ? "Copied" : "Copy the full fingerprint"}>
@@ -429,12 +429,12 @@ function Workbench({ id, status }: { id: string; status: string }) {
                           )}
                         </CopyButton>
                       </Table.Td>
-                      <Table.Td>
+                      <Table.Td data-label="Came from">
                         <Text size="sm" c="dimmed">
                           {str(d["source"]) || "Not stated"}
                         </Text>
                       </Table.Td>
-                      <Table.Td style={{ whiteSpace: "nowrap" }}>
+                      <Table.Td data-label="Recorded" style={{ whiteSpace: "nowrap" }}>
                         <Text size="sm" c="dimmed">
                           {formatWhen(str(d["ingestedAt"]) || job.at)}
                         </Text>
@@ -442,7 +442,7 @@ function Workbench({ id, status }: { id: string; status: string }) {
                     </Table.Tr>
                     {bundle && (
                       <Table.Tr>
-                        <Table.Td colSpan={5} pt={0}>
+                        <Table.Td data-primary colSpan={5} pt={0}>
                           <BundleContents data={d} />
                         </Table.Td>
                       </Table.Tr>
@@ -504,7 +504,7 @@ function Workbench({ id, status }: { id: string; status: string }) {
               <EmptyState title="No signs of attack in this log" />
             ) : (
               <Table.ScrollContainer minWidth={720}>
-                <Table>
+                <Table className="ares-stack">
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th w={190}>When</Table.Th>
@@ -515,13 +515,13 @@ function Workbench({ id, status }: { id: string; status: string }) {
                   <Table.Tbody>
                     {events.map((e, ei) => (
                       <Table.Tr key={ei}>
-                        <Table.Td style={{ whiteSpace: "nowrap" }}>
+                        <Table.Td data-label="When" style={{ whiteSpace: "nowrap" }}>
                           <Text size="sm" c="dimmed">
                             {str(e["time"]) ? formatWhen(str(e["time"])) : "Time not in the log"}
                           </Text>
                         </Table.Td>
-                        <Table.Td>{logEventLabel(str(e["category"]))}</Table.Td>
-                        <Table.Td>
+                        <Table.Td data-label="What happened">{logEventLabel(str(e["category"]))}</Table.Td>
+                        <Table.Td data-label="Log line">
                           <Code bg="transparent" p={0} style={{ wordBreak: "break-all" }}>
                             {str(e["line"])}
                           </Code>
@@ -566,7 +566,7 @@ function BundleContents({ data }: { data: JsonObject }) {
             </Text>
           )}
           <Box style={{ maxHeight: 280, overflowY: "auto", border: "1px solid var(--ares-line)", borderRadius: 8 }}>
-            <Table verticalSpacing={6}>
+            <Table className="ares-stack" verticalSpacing={6}>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>File inside</Table.Th>
@@ -577,9 +577,9 @@ function BundleContents({ data }: { data: JsonObject }) {
               <Table.Tbody>
                 {members.map((m, i) => (
                   <Table.Tr key={i}>
-                    <Table.Td style={{ wordBreak: "break-all" }}>{str(m["name"])}</Table.Td>
-                    <Table.Td style={{ whiteSpace: "nowrap" }}>{formatBytes(num(m["size"]))}</Table.Td>
-                    <Table.Td>
+                    <Table.Td data-primary style={{ wordBreak: "break-all" }}>{str(m["name"])}</Table.Td>
+                    <Table.Td data-label="Size" style={{ whiteSpace: "nowrap" }}>{formatBytes(num(m["size"]))}</Table.Td>
+                    <Table.Td data-label="Fingerprint">
                       <Tooltip label={str(m["sha256"])}>
                         <Code>{str(m["sha256"]).slice(0, 12)}…</Code>
                       </Tooltip>
@@ -621,7 +621,7 @@ function AppBackend({ data, outside }: { data: JsonObject; outside: JsonObject[]
         {inScope.length + outOfScope.length === 0 ? (
           <EmptyState title="No server addresses found in this app" />
         ) : (
-          <Table>
+          <Table className="ares-stack">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Server</Table.Th>
@@ -631,16 +631,16 @@ function AppBackend({ data, outside }: { data: JsonObject; outside: JsonObject[]
             <Table.Tbody>
               {inScope.map((t) => (
                 <Table.Tr key={t}>
-                  <Table.Td style={{ wordBreak: "break-all" }}>{t}</Table.Td>
-                  <Table.Td>
+                  <Table.Td data-primary style={{ wordBreak: "break-all" }}>{t}</Table.Td>
+                  <Table.Td data-label="Status">
                     <ToneBadge tone="good">In scope, tested</ToneBadge>
                   </Table.Td>
                 </Table.Tr>
               ))}
               {outOfScope.map((t) => (
                 <Table.Tr key={t}>
-                  <Table.Td style={{ wordBreak: "break-all" }}>{t}</Table.Td>
-                  <Table.Td>
+                  <Table.Td data-primary style={{ wordBreak: "break-all" }}>{t}</Table.Td>
+                  <Table.Td data-label="Status">
                     <ToneBadge tone="warn">Outside scope, not tested</ToneBadge>
                   </Table.Td>
                 </Table.Tr>
@@ -716,7 +716,7 @@ function WordPressParts({ data, bundle }: { data: JsonObject; bundle: string }) 
       {rows.length === 0 ? (
         <EmptyState title="No plugins or themes found" />
       ) : (
-        <Table>
+        <Table className="ares-stack">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Name</Table.Th>
@@ -727,9 +727,9 @@ function WordPressParts({ data, bundle }: { data: JsonObject; bundle: string }) 
           <Table.Tbody>
             {rows.map((r, i) => (
               <Table.Tr key={i}>
-                <Table.Td>{str(r["slug"])}</Table.Td>
-                <Table.Td>{str(r["kind"])}</Table.Td>
-                <Table.Td>{str(r["version"]) || "Not stated"}</Table.Td>
+                <Table.Td data-primary>{str(r["slug"])}</Table.Td>
+                <Table.Td data-label="Kind">{str(r["kind"])}</Table.Td>
+                <Table.Td data-label="Version">{str(r["version"]) || "Not stated"}</Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>

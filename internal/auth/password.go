@@ -46,6 +46,23 @@ func HashPassword(password string) (string, error) {
 	if len(password) < MinPasswordLen {
 		return "", ErrWeakPassword
 	}
+	return derive(password)
+}
+
+// HashPasswordForDevSeed hashes password exactly like HashPassword but skips the
+// minimum-length policy. It exists only so the local development seeder
+// (cmd/ares-devseed) can provision a short, memorable demo credential. Nothing
+// on a request path calls it: every account created through setup, the API or
+// the UI still goes through HashPassword and its policy.
+func HashPasswordForDevSeed(password string) (string, error) {
+	if password == "" {
+		return "", ErrWeakPassword
+	}
+	return derive(password)
+}
+
+// derive produces the self-describing PBKDF2 hash with a fresh random salt.
+func derive(password string) (string, error) {
 	salt := make([]byte, pbkdf2SaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("auth: salt: %w", err)

@@ -89,7 +89,7 @@ export function DetectionCoverage({ id }: { id: string }) {
           description="Run a test first. The attacker techniques it uses will appear here for you to score."
         />
       ) : (
-        <Table>
+        <Table className="ares-stack">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>What the attacker would do</Table.Th>
@@ -100,14 +100,14 @@ export function DetectionCoverage({ id }: { id: string }) {
           <Table.Tbody>
             {techniques.map((t) => (
               <Table.Tr key={t.technique}>
-                <Table.Td>
+                <Table.Td data-primary>
                   <Text fw={600}>{techniqueLabel(t.technique)}</Text>
                   <Text size="sm" c="dimmed">
                     {t.technique}
                   </Text>
                 </Table.Td>
-                <Table.Td>{t.findings}</Table.Td>
-                <Table.Td>
+                <Table.Td data-label="Findings">{t.findings}</Table.Td>
+                <Table.Td data-label="What the defenders did">
                   <Select
                     aria-label={`What the defenders did for: ${techniqueLabel(t.technique)}`}
                     data={OUTCOMES.map(({ value, label }) => ({ value, label }))}
