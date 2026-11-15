@@ -408,3 +408,130 @@ body {
     display: none;
   }
 }
+
+/* Forensics: the source chooser and the checks as they run. */
+.ares-source {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  width: 100%;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid var(--ares-line);
+  border-radius: 10px;
+  background: var(--ares-surface);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.ares-source:hover {
+  border-color: var(--mantine-color-brand-4);
+}
+.ares-source[aria-checked="true"] {
+  border: 2px solid var(--mantine-color-brand-6);
+  padding: 13px;
+  background: var(--mantine-color-brand-light);
+}
+.ares-source:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}
+.ares-dropzone {
+  border: 1px dashed var(--ares-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--ares-subtle);
+}
+.ares-check-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+  border-top: 1px solid var(--ares-line);
+  transition: background-color 200ms ease, opacity 200ms ease;
+}
+.ares-check-row:first-child {
+  border-top: 0;
+}
+.ares-check-row[data-state="queued"] {
+  opacity: 0.55;
+}
+.ares-check-row[data-state="running"] {
+  background: linear-gradient(90deg, var(--mantine-color-brand-light), transparent);
+  border-top-color: transparent;
+}
+.ares-check-row[data-state="running"] + .ares-check-row {
+  border-top-color: transparent;
+}
+.ares-check-ind {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ares-check-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: var(--ares-line);
+}
+.ares-check-spin {
+  width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  border: 2.5px solid var(--mantine-color-brand-light);
+  border-top-color: var(--mantine-color-brand-6);
+  animation: ares-spin 0.7s linear infinite;
+}
+.ares-check-tick {
+  width: 22px;
+  height: 22px;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mantine-color-teal-light);
+  color: var(--mantine-color-teal-7);
+  animation: ares-pop 320ms ease-out;
+}
+.ares-check-tick[data-tone="bad"] {
+  background: var(--mantine-color-orange-light);
+  color: var(--mantine-color-orange-7);
+}
+.ares-check-state {
+  margin-left: auto;
+  text-align: right;
+  font-size: 13px;
+  color: var(--mantine-color-dimmed);
+  font-variant-numeric: tabular-nums;
+}
+.ares-reveal {
+  animation: ares-enter 450ms ease both;
+}
+@keyframes ares-spin {
+  to { transform: rotate(360deg); }
+}
+@media (max-width: 560px) {
+  .ares-check-row {
+    flex-wrap: wrap;
+  }
+  .ares-check-state {
+    flex-basis: 100%;
+    margin-left: 34px;
+    text-align: left;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ares-check-spin,
+  .ares-check-tick,
+  .ares-reveal {
+    animation: none !important;
+  }
+  .ares-check-row,
+  .ares-source {
+    transition: none;
+  }
+}

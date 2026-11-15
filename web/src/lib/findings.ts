@@ -150,7 +150,9 @@ export function toFinding(
   technique: string,
 ): Finding {
   const d = data ?? {};
-  const sevRaw = str(d["severity"])?.toLowerCase();
+  // A note (for example a match to a withdrawn indicator) is not a weakness.
+  const sevIn = str(d["severity"])?.toLowerCase();
+  const sevRaw = sevIn === "note" ? "info" : sevIn;
   const severity: Severity =
     sevRaw === "critical" ||
     sevRaw === "high" ||
