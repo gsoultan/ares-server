@@ -63,6 +63,9 @@ type OutcomeStore interface {
 	// ByEngagement returns every recorded outcome for an engagement, so a report
 	// can aggregate all of its findings.
 	ByEngagement(engagementID string) []Outcome
+	// Version changes whenever an outcome of the engagement is saved, so derived
+	// views (findings, risk) can be cached until the next change.
+	Version(engagementID string) uint64
 }
 
 // Processor runs a single job to completion. It holds no per-job state, so it
@@ -113,17 +116,22 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 	var mu sync.Mutex
 	var lastSnapshot time.Time
 	ran := false // set once Run returns; later progress reports are dropped
-	// snapshot publishes an independent copy of the current (in-flight)
-	// outcome. The caller holds mu (or no other goroutine is running yet).
+	// snapshot publishes the current (in-flight) outcome. The caller holds mu
+	// (or no other goroutine is running yet). The slices are only ever
+	// appended to, and elements already published are never rewritten, so a
+	// snapshot can share the backing arrays: capping each slice at its length
+	// (the three-index slice) means a later append can never show through it.
+	// That makes a snapshot O(1) instead of a copy of every result so far,
+	// which was quadratic in the size of the job.
 	snapshot := func() {
 		if progress == nil {
 			return
 		}
 		lastSnapshot = time.Now()
 		cp := out
-		cp.Results = append([]module.Result(nil), out.Results...)
-		cp.Allowed = append([]module.Target(nil), out.Allowed...)
-		cp.Denied = append([]Denial(nil), out.Denied...)
+		cp.Results = out.Results[:len(out.Results):len(out.Results)]
+		cp.Allowed = out.Allowed[:len(out.Allowed):len(out.Allowed)]
+		cp.Denied = out.Denied[:len(out.Denied):len(out.Denied)]
 		if out.Progress != nil {
 			p := *out.Progress
 			cp.Progress = &p
@@ -298,30 +306,59 @@ type Estimator interface {
 	Estimate(o Outcome, now time.Time) eta.Estimate
 }
 
-// MemOutcomes is an in-memory OutcomeStore, safe for concurrent use. It also
-// keeps how long recent jobs of each module took, to estimate the time left on
-// running ones.
+// MemOutcomes is the in-memory OutcomeStore. Outcomes are indexed by
+// engagement (newest first), so an engagement's views cost O(its own jobs)
+// rather than a scan of every outcome on the server, and each engagement
+// carries a version that bumps on every save, which lets read paths cache what
+// they derive from its outcomes. It also keeps how long recent jobs of each
+// module took, to estimate the time left on running ones.
 type MemOutcomes struct {
-	mu      sync.Mutex
-	m       map[string]Outcome
-	history *eta.History
+	mu       sync.RWMutex
+	m        map[string]Outcome
+	byEng    map[string][]string // engagement -> job ids, newest StartedAt first
+	versions map[string]uint64   // engagement -> bumps on every Save
+	history  *eta.History
 }
 
 // NewMemOutcomes returns an empty outcome store.
 func NewMemOutcomes() *MemOutcomes {
-	return &MemOutcomes{m: make(map[string]Outcome), history: eta.NewHistory()}
+	return &MemOutcomes{
+		m:        make(map[string]Outcome),
+		byEng:    make(map[string][]string),
+		versions: make(map[string]uint64),
+		history:  eta.NewHistory(),
+	}
 }
 
 // Save stores an outcome by job id. A finished, successful job's duration is
 // added to the module's history.
 func (s *MemOutcomes) Save(o Outcome) {
 	s.mu.Lock()
-	prev, had := s.m[o.JobID]
-	s.m[o.JobID] = o
+	prev, existed := s.m[o.JobID]
+	s.save(o, prev, existed)
 	s.mu.Unlock()
-	if !o.Running() && o.Error == "" && !(had && !prev.Running()) {
+	if !o.Running() && o.Error == "" && !(existed && !prev.Running()) {
 		s.history.Record(o.Module, len(o.Allowed), o.FinishedAt.Sub(o.StartedAt))
 	}
+}
+
+func (s *MemOutcomes) save(o, prev Outcome, existed bool) {
+	s.m[o.JobID] = o
+	s.versions[o.Engagement]++
+	if existed && prev.Engagement == o.Engagement && prev.StartedAt.Equal(o.StartedAt) {
+		return // an in-flight snapshot or the final outcome of a known job
+	}
+	if existed {
+		s.unindex(prev.Engagement, o.JobID)
+		s.versions[prev.Engagement]++
+	}
+	ids := s.byEng[o.Engagement]
+	// Insert keeping newest first; new jobs almost always land at the front.
+	i := sort.Search(len(ids), func(i int) bool { return !s.m[ids[i]].StartedAt.After(o.StartedAt) })
+	ids = append(ids, "")
+	copy(ids[i+1:], ids[i:])
+	ids[i] = o.JobID
+	s.byEng[o.Engagement] = ids
 }
 
 // Estimate returns how long o has left at now.
@@ -332,24 +369,39 @@ func (s *MemOutcomes) Estimate(o Outcome, now time.Time) eta.Estimate {
 	return s.history.Estimate(o.Module, len(o.Allowed), now.Sub(o.StartedAt), o.Progress)
 }
 
-// Get returns an outcome by job id.
+func (s *MemOutcomes) unindex(eng, jobID string) {
+	ids := s.byEng[eng]
+	for i, id := range ids {
+		if id == jobID {
+			s.byEng[eng] = append(ids[:i], ids[i+1:]...)
+			return
+		}
+	}
+}
+
 func (s *MemOutcomes) Get(jobID string) (Outcome, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	o, ok := s.m[jobID]
 	return o, ok
 }
 
-// ByEngagement returns the outcomes for one engagement, newest first.
 func (s *MemOutcomes) ByEngagement(engagementID string) []Outcome {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]Outcome, 0)
-	for _, o := range s.m {
-		if o.Engagement == engagementID {
-			out = append(out, o)
-		}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ids := s.byEng[engagementID]
+	out := make([]Outcome, len(ids))
+	for i, id := range ids {
+		out[i] = s.m[id]
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.After(out[j].StartedAt) })
 	return out
+}
+
+// Version reports a counter that changes whenever any outcome of the
+// engagement is saved. Callers use it to tell whether something derived from
+// ByEngagement is still current.
+func (s *MemOutcomes) Version(engagementID string) uint64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.versions[engagementID]
 }

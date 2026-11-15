@@ -24,7 +24,7 @@ import (
 // dsn returns the test Postgres DSN, or skips. Point ARES_TEST_PG_URL at a
 // throwaway database (the dev script's Postgres on :55433 works); each test
 // resets the public schema, so storm's automigrate rebuilds it from scratch.
-func dsn(t *testing.T) string {
+func dsn(t testing.TB) string {
 	t.Helper()
 	v := os.Getenv("ARES_TEST_PG_URL")
 	if v == "" {
@@ -34,7 +34,7 @@ func dsn(t *testing.T) string {
 }
 
 // freshStore resets the schema and opens a store, so each test starts clean.
-func freshStore(t *testing.T) *Store {
+func freshStore(t testing.TB) *Store {
 	t.Helper()
 	url := dsn(t)
 	ctx := context.Background()

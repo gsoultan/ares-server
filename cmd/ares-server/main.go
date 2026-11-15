@@ -13,10 +13,13 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -163,6 +166,13 @@ func main() {
 
 	go pool.Run(ctx, q.C())
 
+	// Opt-in profiling on its own listener (keep it on loopback): set
+	// ARES_PPROF_ADDR=127.0.0.1:6060 and use `go tool pprof`. It is never mounted
+	// on the public mux.
+	if pprofAddr := os.Getenv("ARES_PPROF_ADDR"); pprofAddr != "" {
+		go servePprof(pprofAddr)
+	}
+
 	// Start the DNS collaborator when a domain and listen address are both set,
 	// so Log4Shell-style lookups can be observed. It is optional: without it,
 	// log4shellprobe simply finds nothing.
@@ -225,7 +235,9 @@ func main() {
 	authInterceptor := connectapi.NewAuthInterceptor(authSvc, connectapi.ParseEnforceMode(os.Getenv("ARES_REQUIRE_AUTH")))
 	grpcPath, grpcHTTP := aresv1connect.NewControlPlaneHandler(grpcHandler,
 		connect.WithReadMaxBytes(int(maxReqBytes)),
-		connect.WithInterceptors(authInterceptor))
+		connect.WithInterceptors(authInterceptor),
+		compressionOption(os.Getenv("ARES_COMPRESSION")),
+		connect.WithCompressMinBytes(1024))
 
 	mux := http.NewServeMux()
 	mux.Handle(grpcPath, grpcHTTP)
@@ -289,3 +301,47 @@ func loadSealer() (*secret.Sealer, error) {
 func isPostgresDSN(v string) bool {
 	return strings.HasPrefix(v, "postgres://") || strings.HasPrefix(v, "postgresql://")
 }
+
+// servePprof serves the runtime profiles on a dedicated listener.
+func servePprof(addr string) {
+	m := http.NewServeMux()
+	m.HandleFunc("/debug/pprof/", pprof.Index)
+	m.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	m.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	m.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	m.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	srv := &http.Server{Addr: addr, Handler: m, ReadHeaderTimeout: 5 * time.Second}
+	log.Printf("ares pprof on %s", addr)
+	if err := srv.ListenAndServe(); err != nil {
+		log.Printf("pprof: %v", err)
+	}
+}
+
+// compressionOption picks how control-plane responses are compressed.
+// Compression was a third of the server's CPU under load (gzip at the default
+// level on every response, however small), so the default is the fastest gzip
+// level, which keeps most of the size win at a fraction of the cost, and
+// responses under 1 KiB are sent as they are. ARES_COMPRESSION=off turns
+// response compression off entirely (the cheapest choice when clients sit on
+// the same LAN or a TLS proxy compresses); "default" restores gzip's default
+// level.
+func compressionOption(mode string) connect.HandlerOption {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "off", "none":
+		return connect.WithCompression("gzip", nil, nil)
+	case "default":
+		return connect.WithCompression("gzip", newGzipReader, func() connect.Compressor { return gzip.NewWriter(io.Discard) })
+	default:
+		return connect.WithCompression("gzip", newGzipReader, newFastGzipWriter)
+	}
+}
+
+// newFastGzipWriter compresses responses at gzip.BestSpeed. connect pools the
+// writers, so the constructor's allocation is paid once per pooled writer.
+func newFastGzipWriter() connect.Compressor {
+	w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed) // a valid level never errors
+	return w
+}
+
+// newGzipReader decompresses gzip request bodies (as connect's default does).
+func newGzipReader() connect.Decompressor { return &gzip.Reader{} }

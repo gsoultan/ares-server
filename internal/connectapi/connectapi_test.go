@@ -41,7 +41,7 @@ func (echoModule) Run(_ context.Context, _ module.Scope, targets []module.Target
 }
 
 // newTestHandler wires a handler over a real, running worker pool.
-func newTestHandler(t *testing.T) *Handler {
+func newTestHandler(t testing.TB) *Handler {
 	t.Helper()
 	reg := module.NewRegistry()
 	if err := reg.Register(echoModule{}); err != nil {

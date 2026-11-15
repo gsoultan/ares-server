@@ -97,6 +97,14 @@ func (l *Log) Entries() []Entry {
 
 // Verify walks the chain and confirms each entry's hash and its link to the
 // previous one. It returns an error naming the first broken sequence number.
+// Len returns the number of entries. The log is append-only, so a length is
+// enough to tell whether anything derived from Entries is still current.
+func (l *Log) Len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.entries)
+}
+
 func (l *Log) Verify() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
