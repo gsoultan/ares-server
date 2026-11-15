@@ -40,6 +40,9 @@ var moduleGroup = map[string]string{
 	"tlscheck":    CapWebCheck,
 	"headerprobe": CapWebCheck,
 	"httpprobe":   CapWebCheck,
+	// passive internal-exposure assessment (observation-only, inert)
+	"passivesniff": CapPassiveSniff,
+	"mitmexposure": CapMITMExposure,
 }
 
 // AllCapabilities lists every capability group, for the operator UI. mitmexposure
