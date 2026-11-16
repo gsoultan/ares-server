@@ -47,7 +47,7 @@ func newAnthropic(cfg Config) (Provider, error) {
 		baseURL:   strings.TrimRight(base, "/"),
 		maxTokens: cfg.MaxTokens,
 		temp:      cfg.Temperature,
-		client:    newHTTPClient(cfg.Timeout),
+		client:    newHTTPClient(cfg.Timeout, cfg.RestrictPrivate),
 	}, nil
 }
 

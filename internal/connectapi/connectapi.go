@@ -117,18 +117,29 @@ func (h *Handler) ListModules(_ context.Context, _ *connect.Request[aresv1.ListM
 	return connect.NewResponse(&aresv1.ListModulesResponse{Modules: h.reg.Names()}), nil
 }
 
-// CreateTenant creates a client workspace.
-func (h *Handler) CreateTenant(_ context.Context, req *connect.Request[aresv1.CreateTenantRequest]) (*connect.Response[aresv1.Tenant], error) {
+// CreateTenant creates a client workspace. Once accounts exist it is a
+// super-admin action.
+func (h *Handler) CreateTenant(ctx context.Context, req *connect.Request[aresv1.CreateTenantRequest]) (*connect.Response[aresv1.Tenant], error) {
 	if req.Msg.GetName() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name is required"))
+	}
+	if sess, ok := SessionFromContext(ctx); ok && sess.Role != auth.RoleSuperAdmin {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only a super-admin may create workspaces"))
 	}
 	t := h.store.CreateTenant(req.Msg.GetName())
 	return connect.NewResponse(tenantProto(t)), nil
 }
 
-// ListTenants lists the client workspaces.
-func (h *Handler) ListTenants(_ context.Context, _ *connect.Request[aresv1.ListTenantsRequest]) (*connect.Response[aresv1.ListTenantsResponse], error) {
+// ListTenants lists the client workspaces. A workspace-bound account sees only
+// its own, never the names of the platform's other clients.
+func (h *Handler) ListTenants(ctx context.Context, _ *connect.Request[aresv1.ListTenantsRequest]) (*connect.Response[aresv1.ListTenantsResponse], error) {
 	list := h.store.ListTenants()
+	if sess, ok := SessionFromContext(ctx); ok && sess.Role != auth.RoleSuperAdmin {
+		list = list[:0:0]
+		if t, found := h.store.GetTenant(sess.TenantID); found {
+			list = append(list, t)
+		}
+	}
 	resp := &aresv1.ListTenantsResponse{Tenants: make([]*aresv1.Tenant, 0, len(list))}
 	for _, t := range list {
 		resp.Tenants = append(resp.Tenants, tenantProto(t))

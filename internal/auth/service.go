@@ -108,10 +108,17 @@ func (s *Service) SetRole(id string, role Role) (User, error) {
 	if !ok {
 		return User{}, ErrUserNotFound
 	}
+	changed := u.Role != role
 	u.Role = role
 	u.UpdatedAt = time.Now().UTC()
 	if err := s.users.UpdateUser(u); err != nil {
 		return User{}, err
+	}
+	if changed {
+		// A privilege change ends every open session of the account.
+		if err := s.sessions.DeleteForUser(u.ID); err != nil {
+			return User{}, fmt.Errorf("auth: revoke sessions: %w", err)
+		}
 	}
 	return u, nil
 }
@@ -129,6 +136,12 @@ func (s *Service) SetDisabled(id string, disabled bool) (User, error) {
 	u.UpdatedAt = time.Now().UTC()
 	if err := s.users.UpdateUser(u); err != nil {
 		return User{}, err
+	}
+	if disabled {
+		// A disabled account loses every open session immediately.
+		if err := s.sessions.DeleteForUser(u.ID); err != nil {
+			return User{}, fmt.Errorf("auth: revoke sessions: %w", err)
+		}
 	}
 	return u, nil
 }
@@ -177,6 +190,20 @@ func (s *Service) Authenticate(token string) (Session, error) {
 		return Session{}, ErrNotAuthenticated
 	}
 	if sess.Expired() {
+		_ = s.sessions.Delete(h)
+		return Session{}, ErrNotAuthenticated
+	}
+	// The session is only as good as the account behind it. Re-check the user on
+	// every request so that disabling an account, deleting it, moving it to
+	// another workspace or changing its role takes effect at once, rather than
+	// when the session would have expired. A role or workspace change ends the
+	// session (the user signs in again and gets a fresh token), which is the
+	// rotation-on-privilege-change rule.
+	u, ok, err := s.users.GetUserByID(sess.UserID)
+	if err != nil {
+		return Session{}, err
+	}
+	if !ok || u.Disabled || u.Role != sess.Role || u.TenantID != sess.TenantID {
 		_ = s.sessions.Delete(h)
 		return Session{}, ErrNotAuthenticated
 	}

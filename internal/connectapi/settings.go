@@ -32,9 +32,23 @@ func (h *Handler) GetSettings(_ context.Context, req *connect.Request[aresv1.Get
 	return connect.NewResponse(settingsViewProto(v)), nil
 }
 
+// requireSettingsManager allows a workspace's provider settings and keys to be
+// changed or exercised only by an owner, admin or super-admin. A call with no
+// session got past the interceptor only because auth is not enforced yet
+// (first-run setup, or ARES_REQUIRE_AUTH=off).
+func requireSettingsManager(ctx context.Context) error {
+	if sess, ok := SessionFromContext(ctx); ok && !sess.Role.IsManager() {
+		return connect.NewError(connect.CodePermissionDenied, errors.New("only a workspace owner or admin may change settings"))
+	}
+	return nil
+}
+
 // UpdateSettings applies a settings patch. Secret values are write-only: they
 // are sealed and stored, never echoed back. The response is the masked view.
-func (h *Handler) UpdateSettings(_ context.Context, req *connect.Request[aresv1.UpdateSettingsRequest]) (*connect.Response[aresv1.SettingsView], error) {
+func (h *Handler) UpdateSettings(ctx context.Context, req *connect.Request[aresv1.UpdateSettingsRequest]) (*connect.Response[aresv1.SettingsView], error) {
+	if err := requireSettingsManager(ctx); err != nil {
+		return nil, err
+	}
 	if h.settings == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("settings store not configured (complete first-run setup)"))
 	}
@@ -96,6 +110,9 @@ func settingsViewProto(v settings.View) *aresv1.SettingsView {
 // key that is never stored). No engagement data is sent — only a tiny ping — so
 // it needs no opt-in. Any failure is surfaced as a key-free error.
 func (h *Handler) TestAIProvider(ctx context.Context, req *connect.Request[aresv1.TestAIProviderRequest]) (*connect.Response[aresv1.TestAIProviderResponse], error) {
+	if err := requireSettingsManager(ctx); err != nil {
+		return nil, err
+	}
 	if h.settings == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("settings store not configured (complete first-run setup)"))
 	}
@@ -109,6 +126,19 @@ func (h *Handler) TestAIProvider(ctx context.Context, req *connect.Request[aresv
 	}
 	if msg.GetAiPresent() {
 		a := msg.GetAi()
+		// Testing against a different provider or URL must never carry the saved
+		// key there: an unsaved endpoint is tested only with a one-off key.
+		endpointChanged := (a.GetProvider() != "" && a.GetProvider() != cfg.Provider) ||
+			(a.GetBaseUrl() != "" && a.GetBaseUrl() != cfg.BaseURL)
+		if endpointChanged {
+			cfg.APIKey = ""
+		}
+		if a.GetBaseUrl() != "" && a.GetBaseUrl() != cfg.BaseURL {
+			if err := ai.CheckTenantEndpoint(a.GetBaseUrl()); err != nil {
+				return connect.NewResponse(&aresv1.TestAIProviderResponse{Provider: cfg.Provider, Model: cfg.Model, Error: err.Error()}), nil
+			}
+			cfg.RestrictPrivate = true
+		}
 		if a.GetProvider() != "" {
 			cfg.Provider = a.GetProvider()
 		}

@@ -21,14 +21,10 @@ import (
 	"github.com/gsoultan/ares-server/internal/auth"
 )
 
-// sessionCtxKey carries the authenticated session through the request context.
-type sessionCtxKey struct{}
-
 // SessionFromContext returns the authenticated session, if the interceptor put
 // one there. ok is false for unauthenticated (public) calls.
 func SessionFromContext(ctx context.Context) (auth.Session, bool) {
-	s, ok := ctx.Value(sessionCtxKey{}).(auth.Session)
-	return s, ok
+	return auth.SessionFrom(ctx)
 }
 
 // publicProcedures are the RPCs that never require a session: first-run setup
@@ -132,7 +128,7 @@ func (i *authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid or expired session"))
 			}
 			sess, haveSess = s, true
-			ctx = context.WithValue(ctx, sessionCtxKey{}, s)
+			ctx = auth.WithSession(ctx, s)
 		}
 
 		if publicProcedures[name] {
@@ -264,6 +260,6 @@ func (i *authInterceptor) RESTMiddleware(next http.Handler) http.Handler {
 			}
 			r.Header.Set(restTenantHeader, sess.TenantID)
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(auth.WithSession(r.Context(), sess)))
 	})
 }

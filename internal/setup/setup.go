@@ -16,9 +16,11 @@ package setup
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gsoultan/ares-server/internal/auth"
@@ -180,11 +182,14 @@ type CommitResult struct {
 // Service performs setup over the setup store, the auth service, the engagement
 // store (to name the default workspace) and the key file.
 type Service struct {
-	store   Store
-	auth    *auth.Service
-	tenants engagement.Store
-	dbPath  string
-	keyPath string
+	// commitMu serializes Commit, so two concurrent first-run requests cannot
+	// both pass the "not initialized yet" check and each create a super-admin.
+	commitMu sync.Mutex
+	store    Store
+	auth     *auth.Service
+	tenants  engagement.Store
+	dbPath   string
+	keyPath  string
 	// activeDriver is the backend the running server actually opened at start
 	// (file or postgres). It is the only committable driver, since the datastore
 	// is chosen at boot, not in the wizard. Empty means the file driver.
@@ -229,7 +234,7 @@ func (s *Service) Status() (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	st := State{Initialized: cfg.Initialized, Drivers: driversFor(s.active()), DBPath: s.dbPath, KeyFilePath: s.keyPath}
+	st := State{Initialized: cfg.Initialized, Drivers: driversFor(s.active()), DBPath: RedactDSN(s.dbPath), KeyFilePath: s.keyPath}
 	if cfg.Initialized {
 		st.InitializedAt = cfg.InitializedAt
 		st.Needed = false
@@ -247,6 +252,13 @@ func (s *Service) Status() (State, error) {
 // file driver it confirms the target directory exists and is writable; the
 // Postgres backend is not yet available.
 func (s *Service) TestDatabase(driver, path string) error {
+	// The probe writes a file to a caller-chosen directory, so it is only open
+	// while the install still needs its first-run setup.
+	if st, err := s.Status(); err != nil {
+		return err
+	} else if !st.Needed {
+		return ErrAlreadyInitialized
+	}
 	if driver == "" {
 		driver = s.active()
 	}
@@ -297,6 +309,8 @@ func testFilePath(path string) error {
 // Commit performs the one-shot, atomic-as-possible provisioning. It refuses to
 // run on an already-initialized install.
 func (s *Service) Commit(req CommitRequest) (CommitResult, error) {
+	s.commitMu.Lock()
+	defer s.commitMu.Unlock()
 	// Guard: never re-provision an initialized install.
 	cfg, _, err := s.store.GetConfig()
 	if err != nil {
@@ -402,4 +416,25 @@ func (m *MemStore) PutConfig(c Config) error {
 	m.cfg = c
 	m.set = true
 	return nil
+}
+
+// RedactDSN hides the password of a database URL (postgres://user:pass@host/db
+// becomes postgres://user:xxxxx@host/db), so a connection string can be shown
+// or logged without handing out the credential. A plain file path is returned
+// unchanged; a URL that does not parse is replaced by a placeholder rather than
+// risk echoing a secret.
+func RedactDSN(dsn string) string {
+	if !strings.Contains(dsn, "://") {
+		return dsn
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return "(connection string hidden)"
+	}
+	q := u.Query()
+	if q.Has("password") {
+		q.Set("password", "xxxxx")
+		u.RawQuery = q.Encode()
+	}
+	return u.Redacted()
 }
