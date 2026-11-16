@@ -204,6 +204,26 @@ export function InfoNote({ children, title }: { children: ReactNode; title?: str
   );
 }
 
+// WarnNote marks something the reader must know before trusting the rest of
+// the page, such as a test that ran only with a recorded approval.
+export function WarnNote({ children, title, icon }: { children: ReactNode; title?: string; icon?: ReactNode }) {
+  return (
+    <Alert color={toneColor("warn")} title={title} icon={icon ?? <IconAlertTriangle size={18} />}>
+      {children}
+    </Alert>
+  );
+}
+
+// GoodNote states a reassurance the evidence backs, such as nothing having
+// been changed to get a proof.
+export function GoodNote({ children, title, icon }: { children: ReactNode; title?: string; icon?: ReactNode }) {
+  return (
+    <Alert color={toneColor("good")} title={title} icon={icon ?? <IconInfoCircle size={18} />}>
+      {children}
+    </Alert>
+  );
+}
+
 // Field is a labelled fact: a quiet caption over a value.
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (

@@ -283,6 +283,8 @@ const ACTIONS: Record<string, string> = {
   "finding-status": "Finding status changed",
   "evidence-ingested": "Evidence recorded",
   result: "Result recorded",
+  "proof-recorded": "Proof sealed",
+  "proof-recheck": "Proof re-check started",
 };
 
 export function actionLabel(action: string): string {
@@ -448,4 +450,56 @@ export function formatBytes(n: number): string {
   if (n < 1024) return `${n} bytes`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// How sure Ares is of a finding, from the kind of proof it holds. The badge
+// says only what the evidence supports: a version match is never "Proven".
+export type ProofState = "proven" | "version" | "observed";
+
+const ACTIVE_PROOF = new Set(["callback", "computed", "differential", "answer"]);
+
+export function proofState(kind: string | undefined): ProofState {
+  if (kind && ACTIVE_PROOF.has(kind)) return "proven";
+  if (kind === "version") return "version";
+  return "observed";
+}
+
+export function proofStateInfo(state: ProofState): StatusInfo {
+  switch (state) {
+    case "proven":
+      return {
+        label: "Proven",
+        tone: "good",
+        hint: "Ares made the target show this weakness with a harmless test, and recorded the exchange.",
+      };
+    case "version":
+      return {
+        label: "Version confirmed, not attacked",
+        tone: "warn",
+        hint: "The software version matches a known weakness. Ares did not try to use it.",
+      };
+    default:
+      return {
+        label: "Observed",
+        tone: "neutral",
+        hint: "Ares saw the signs of this weakness but did not reproduce it.",
+      };
+  }
+}
+
+// Why the exchange proves the weakness, one sentence per kind of proof.
+const PROOF_WHY: Record<string, string> = {
+  callback:
+    "Ares asked the target to visit a one-time address that only Ares knows. The visit itself is the proof: the code was made for this finding alone and shown nowhere else.",
+  computed:
+    "Ares asked the server to work out a sum it chose at random. Only a server that runs what it is sent could answer with the right result between the markers.",
+  differential:
+    "The same request was refused without the trick and let through with it, so the trick is what opened the door.",
+  answer: "Ares asked a read-only question and the service answered it without asking for a password.",
+  version:
+    "The version the target reports falls inside the range a published advisory names as weak. Ares did not try to use the weakness.",
+};
+
+export function proofWhy(kind: string): string | undefined {
+  return PROOF_WHY[kind];
 }

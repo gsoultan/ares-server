@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
-import { Button, Code, Select, SimpleGrid, Stack, Text } from "@mantine/core";
-import { IconArrowLeft, IconRefresh } from "@tabler/icons-react";
+import { Button, Code, Group, Select, SimpleGrid, Stack, Text } from "@mantine/core";
+import { IconArrowLeft, IconKey, IconRefresh } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { severityMeaning } from "../../lib/findings.ts";
-import { errorText, formatWhen, moduleInfo, techniqueLabel } from "../../lib/labels.ts";
-import { ErrorNote, InfoNote, PageHeader, Section, SeverityBadge, StatusBadge } from "../../ui/index.tsx";
+import { errorText, formatWhen, moduleInfo, proofState, proofStateInfo, techniqueLabel } from "../../lib/labels.ts";
+import { ErrorNote, InfoNote, PageHeader, Section, SeverityBadge, StatusBadge, WarnNote } from "../../ui/index.tsx";
 import { useStartTest } from "../engagement/startTest.ts";
 import {
   findingState,
   findingStateInfo,
   useFindings,
   useJobs,
+  useRecheckFinding,
   useSetFindingStatus,
   type FindingRecord,
   type FindingStatus,
 } from "../workspace/data.ts";
 import { Facts, FixSteps, Part } from "./FindingParts.tsx";
 import { AiAdvice } from "../ai/AiAdvice.tsx";
+import { ProofPanel } from "./ProofPanel.tsx";
 
 const STATUS_OPTIONS: { value: FindingStatus; label: string }[] = [
   { value: "open", label: "Open" },
@@ -41,6 +43,8 @@ export function FindingDetail({
   const state = findingState(record);
   const test = moduleInfo(record.module);
   const start = useStartTest(record.engagementId);
+  const reproduce = useRecheckFinding(record);
+  const proofInfo = proofStateInfo(proofState(record.proof?.kind));
   const { jobs } = useJobs(record.engagementId);
   const [recheckJob, setRecheckJob] = useState<string | null>(null);
 
@@ -61,12 +65,22 @@ export function FindingDetail({
     if (reopen) mutate({ id: record.id, status: "open" });
   }, [reopen, record.id, mutate]);
 
-  const canRecheck = canTest && test.targets !== null && record.target !== "";
-  const onRecheck = () =>
+  // A finding with a re-checkable proof re-runs only that proof; any other
+  // finding re-runs its whole test on the same address.
+  const hasProbe = !!record.proof?.recheck;
+  const canRecheck = canTest && record.target !== "" && (hasProbe || test.targets !== null);
+  const rerunTest = () =>
     start.mutate(
       { module: record.module, targets: [record.target] },
       { onSuccess: (jobId) => setRecheckJob(jobId) },
     );
+  const onRecheck = () =>
+    hasProbe
+      ? reproduce.mutate(undefined, {
+          onSuccess: (jobId) => (jobId ? setRecheckJob(jobId) : test.targets !== null && rerunTest()),
+        })
+      : rerunTest();
+  const recheckError = start.error ?? reproduce.error;
 
   const proof = [
     ...Object.entries(f.evidence).map(([k, v]) => ({
@@ -122,11 +136,20 @@ export function FindingDetail({
           </Link>
         }
         title={f.title}
-        badge={<SeverityBadge severity={f.severity} />}
+        badge={
+          <Group gap="xs">
+            <SeverityBadge severity={f.severity} />
+            <StatusBadge info={proofInfo} />
+          </Group>
+        }
         description={
           <Text span style={{ wordBreak: "break-all" }}>
-            {[f.url ?? record.target, `found ${lower(formatWhen(record.foundAt))}`]
-              .filter((x) => x !== "")
+            {[
+              f.url ?? record.target,
+              record.approval && "approved intrusive test",
+              `found ${lower(formatWhen(record.foundAt))}`,
+            ]
+              .filter((x) => !!x)
               .join(" · ")}
           </Text>
         }
@@ -147,7 +170,7 @@ export function FindingDetail({
             {canRecheck && (
               <Button
                 leftSection={<IconRefresh size={16} />}
-                loading={start.isPending || (!!recheckJob && !settled)}
+                loading={start.isPending || reproduce.isPending || (!!recheckJob && !settled)}
                 onClick={onRecheck}
               >
                 Re-check now
@@ -157,8 +180,21 @@ export function FindingDetail({
         }
       />
 
-      {start.isError && (
-        <ErrorNote title="The re-check could not start">{errorText(start.error)}</ErrorNote>
+      {record.approval && (
+        <WarnNote title="This was an approved intrusive test" icon={<IconKey size={18} />}>
+          {[
+            `Approved by ${record.approval.who}${record.approval.how ? ` (${record.approval.how})` : ""}${
+              record.approval.at ? `, ${lower(formatWhen(record.approval.at))}` : ""
+            }, before it ran.`,
+            record.approval.action,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        </WarnNote>
+      )}
+
+      {recheckError && (
+        <ErrorNote title="The re-check could not start">{errorText(recheckError)}</ErrorNote>
       )}
       {setStatus.isError && (
         <ErrorNote title="The status could not be saved">{errorText(setStatus.error)}</ErrorNote>
@@ -205,14 +241,37 @@ export function FindingDetail({
         </Section>
       )}
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg" style={{ alignItems: "start" }}>
-        <Section title="Proof" description="What the test saw, so this is evidence and not a guess.">
-          <Facts rows={proof} />
-        </Section>
-        <Section title="History" description="Where this finding stands.">
-          <Facts rows={history} />
-        </Section>
-      </SimpleGrid>
+      {record.proof ? (
+        <>
+          <ProofPanel
+            findingId={record.id}
+            proof={record.proof}
+            checks={record.proofChecks}
+            approval={record.approval}
+            extra={proof}
+          />
+          <Section title="History" description="Where this finding stands.">
+            <Facts rows={history} />
+          </Section>
+        </>
+      ) : (
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg" style={{ alignItems: "start" }}>
+          <Section
+            title={
+              <Group gap="sm" component="span">
+                Proof
+                <StatusBadge info={proofInfo} />
+              </Group>
+            }
+            description="What the test saw. Ares did not reproduce it, so there is no recorded exchange to show."
+          >
+            <Facts rows={proof} />
+          </Section>
+          <Section title="History" description="Where this finding stands.">
+            <Facts rows={history} />
+          </Section>
+        </SimpleGrid>
+      )}
     </Stack>
   );
 }

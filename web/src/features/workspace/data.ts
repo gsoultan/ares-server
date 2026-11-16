@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { control } from "../../client.ts";
-import type { JobProgress, JobSummary } from "../../gen/ares/v1/ares_pb.ts";
-import { severityRank, toFinding, type Finding } from "../../lib/findings.ts";
+import type { JobProgress, JobSummary, Proof, ProofCheck } from "../../gen/ares/v1/ares_pb.ts";
+import { addPending } from "../../lib/local.ts";
+import { severityRank, toApproval, toFinding, type Approval, type Finding } from "../../lib/findings.ts";
 import type { StatusInfo } from "../../lib/labels.ts";
 import { dropPending, usePending } from "../../lib/local.ts";
 import { useTenant } from "../../tenant.tsx";
@@ -166,6 +167,13 @@ export interface FindingRecord {
   // True once a later run of the same test on the same address no longer
   // finds it: the fix is confirmed, not only claimed.
   rechecked: boolean;
+  // The structured evidence: what Ares sent, what came back and its sealed
+  // fingerprint. Absent for a finding that was only observed.
+  proof?: Proof;
+  // Every time the proof was reproduced on demand, newest first.
+  proofChecks: ProofCheck[];
+  // Set when the finding came from an approved intrusive test.
+  approval?: Approval;
 }
 
 // keepWithdrawn keeps a match to a withdrawn indicator: a note, not a
@@ -194,6 +202,9 @@ export function useFindings(engagementId?: string, keepWithdrawn = false): {
           finding: toFinding(f.data, f.kind, f.technique),
           status: f.status === "in_progress" || f.status === "fixed" ? f.status : "open",
           rechecked: !f.stillPresent,
+          proof: f.proof,
+          proofChecks: f.rechecks,
+          approval: toApproval(f.data),
         }))
         // A note is not a weakness; it stays with its test's results.
         .filter((f) => f.finding.severity !== "info" || (keepWithdrawn && f.finding.raw["withdrawn"] === true))
@@ -219,6 +230,41 @@ export function useSetFindingStatus() {
       void qc.invalidateQueries({ queryKey: ["findings", tenantId] });
       void qc.invalidateQueries({ queryKey: ["audit", tenantId] });
     },
+  });
+}
+
+// useRecheckFinding reproduces a finding's own proof against the live target.
+// The server sends the narrowed probe through the normal scope gate, so a
+// stopped engagement or an address now out of scope is refused, never tested.
+// It returns the re-check's test id, or null when there is nothing to re-run.
+export function useRecheckFinding(record: FindingRecord) {
+  const { tenantId } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const res = await control.recheckFinding({ tenantId, findingId: record.id, actor: "operator" });
+      if (!res.rechecked) return null;
+      addPending({
+        jobId: res.jobId,
+        engagementId: record.engagementId,
+        tenantId,
+        module: record.proof?.recheck?.module || record.module,
+        targets: [record.target],
+      });
+      return res.jobId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["audit", tenantId, record.engagementId] });
+    },
+  });
+}
+
+// useProofDownload fetches a finding's proof as the exact record its
+// fingerprint covers, so anyone can check it with sha256sum.
+export function useProofDownload(findingId: string) {
+  const { tenantId } = useTenant();
+  return useMutation({
+    mutationFn: () => control.getProofArtifact({ tenantId, findingId }),
   });
 }
 
