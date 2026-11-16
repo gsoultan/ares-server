@@ -44,6 +44,9 @@ type SessionStore interface {
 	Load(tokenHash string) (Session, bool, error)
 	// Delete removes a session by token hash.
 	Delete(tokenHash string) error
+	// DeleteForUser removes every session of a user. It revokes access at once
+	// when an account is disabled or its role changes.
+	DeleteForUser(userID string) error
 }
 
 // newToken returns a 256-bit random bearer token, URL-safe base64.
@@ -95,5 +98,17 @@ func (s *MemSessionStore) Delete(tokenHash string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.m, tokenHash)
+	return nil
+}
+
+// DeleteForUser implements SessionStore.
+func (s *MemSessionStore) DeleteForUser(userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for h, sess := range s.m {
+		if sess.UserID == userID {
+			delete(s.m, h)
+		}
+	}
 	return nil
 }

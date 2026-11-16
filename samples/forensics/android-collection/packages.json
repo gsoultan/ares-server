@@ -1,0 +1,6 @@
+[
+  {"name":"com.android.chrome","system":true,"installer":"","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  {"name":"org.example.notes","system":false,"installer":"com.android.vending","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+  {"name":"com.example.spyagent","system":false,"installer":"","path":"/data/app/spyagent.apk","sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","certificates":[{"sha1":"dddddddddddddddddddddddddddddddddddddddd"}]},
+  {"name":"com.example.helper","system":false,"installer":"","sha256":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","permissions":["android.permission.BIND_ACCESSIBILITY_SERVICE","android.permission.READ_SMS","android.permission.ACCESS_FINE_LOCATION"]}
+]

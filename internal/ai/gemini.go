@@ -44,7 +44,7 @@ func newGemini(cfg Config) (Provider, error) {
 		baseURL:   base,
 		maxTokens: cfg.MaxTokens,
 		temp:      cfg.Temperature,
-		client:    newHTTPClient(cfg.Timeout),
+		client:    newHTTPClient(cfg.Timeout, cfg.RestrictPrivate),
 	}, nil
 }
 

@@ -187,6 +187,11 @@ func (s *Service) Apply(tenantID string, u Update) (View, error) {
 		st.Secrets = map[string]SealedSecret{}
 	}
 	if u.AI != nil {
+		// A workspace-chosen endpoint must be a public https URL, so a member
+		// cannot aim the server at its internal network or cloud metadata.
+		if err := ai.CheckTenantEndpoint(u.AI.BaseURL); err != nil {
+			return View{}, err
+		}
 		st.AI = *u.AI
 	}
 	for _, su := range u.Secrets {
@@ -277,9 +282,23 @@ func (s *Service) AIConfig(tenantID string) (ai.Config, error) {
 			cfg.Temperature = st.AI.Temperature
 		}
 	}
-	if key, keyOK, err := s.openSecret(tenantID, SecretAIAPIKey); err != nil {
-		return ai.Config{}, err
-	} else if keyOK {
+	// The operator's environment key belongs to the operator's endpoint. When a
+	// workspace points the advisor at a different provider or URL, the
+	// environment key is never sent there: the workspace must bring its own.
+	env := ai.ConfigFromEnv()
+	overridden := ok && ((st.AI.Provider != "" && st.AI.Provider != env.Provider) ||
+		(st.AI.BaseURL != "" && st.AI.BaseURL != env.BaseURL))
+	if overridden {
+		cfg.APIKey = ""
+	}
+	if ok && st.AI.BaseURL != "" && st.AI.BaseURL != env.BaseURL {
+		cfg.RestrictPrivate = true
+	}
+	if sec, has := st.Secrets[SecretAIAPIKey]; has {
+		key, err := s.sealer.OpenString(sec.Ciphertext)
+		if err != nil {
+			return ai.Config{}, fmt.Errorf("settings: open %s: %w", SecretAIAPIKey, err)
+		}
 		cfg.APIKey = key
 	}
 	return cfg, nil

@@ -1,64 +1,69 @@
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import {
   Badge,
   Box,
   Button,
-  Card,
   Checkbox,
   Code,
   CopyButton,
-  FileInput,
   Group,
+  SimpleGrid,
   Stack,
   Table,
   Text,
-  Textarea,
   TextInput,
+  ThemeIcon,
   Tooltip,
+  UnstyledButton,
 } from "@mantine/core";
-import { IconCopy, IconFileSearch, IconUpload } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCopy, IconFileSearch, IconFolder, IconUpload, IconX } from "@tabler/icons-react";
 import type { JsonObject } from "@bufbuild/protobuf";
 import { useQueries } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { control } from "../client.ts";
-import { errorText, formatBytes, formatWhen, logEventLabel, moduleInfo } from "../lib/labels.ts";
+import type { Engagement } from "../gen/ares/v1/ares_pb.ts";
+import { errorText, formatBytes, formatWhen, logEventLabel, plural } from "../lib/labels.ts";
+import { addPending, recordForensicRun, useForensicRuns, type ForensicRun } from "../lib/local.ts";
 import { useTenant } from "../tenant.tsx";
-import {
-  EmptyState,
-  ErrorNote,
-  InfoNote,
-  LoadingState,
-  PageHeader,
-  Section,
-  ToneBadge,
-} from "../ui/index.tsx";
-import { useStartTest } from "../features/engagement/startTest.ts";
+import { EmptyState, ErrorNote, InfoNote, LoadingState, PageHeader, Section, ToneBadge } from "../ui/index.tsx";
 import { FindingsTable } from "../features/findings/FindingsTable.tsx";
-import { EngagementPicker } from "../features/workspace/EngagementPicker.tsx";
-import { useEngagements, useFindings, useJobs, type Job } from "../features/workspace/data.ts";
-import { timeLeft } from "../lib/timeLeft.ts";
+import { CasePicker, isQuickCase, QUICK_CASE, QUICK_VALUE, useEnsureQuickCase } from "../features/forensics/CasePicker.tsx";
+import { CheckRun, SOURCE_ICON } from "../features/forensics/CheckRun.tsx";
+import type { LeftOut } from "../features/forensics/files.ts";
+import { useFeeds } from "../features/forensics/indicators.ts";
+import { ProvenanceTag } from "../features/forensics/Provenance.tsx";
+import { ShareIndicators } from "../features/forensics/ShareIndicators.tsx";
+import { MAX_FILE_BYTES, planChecks, sourceDef, SOURCES, type SourceId } from "../features/forensics/sources.ts";
+import { ThreatIndicators } from "../features/forensics/ThreatIndicators.tsx";
+import { useEngagements, useFindings, useJobs, type FindingRecord } from "../features/workspace/data.ts";
 
 const route = getRouteApi("/forensics");
 
-// Files travel inside the request, so very large ones are turned away here
-// with a clear message instead of failing on the way.
-const MAX_FILE_BYTES = 20 * 1024 * 1024;
+// The capabilities whose findings belong on this page.
+const FORENSIC = [
+  "filemeta",
+  "logscan",
+  "iocmatch",
+  "triage",
+  "apkscan",
+  "wpscan",
+  "apkbackend",
+  "androidqf",
+  "iosbackup",
+  "persistplist",
+  "dnslogscan",
+  "connrecord",
+  "eventlog",
+  "winpersist",
+  "winartifacts",
+  "mailheader",
+  "browserhist",
+  "timeline",
+];
 
-const FORENSIC = ["filemeta", "logscan", "iocmatch", "triage", "apkscan", "wpscan", "apkbackend"];
-
-const isApp = (f: File) => f.name.toLowerCase().endsWith(".apk");
-
-function readBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const res = String(reader.result);
-      resolve(res.slice(res.indexOf(",") + 1));
-    };
-    reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
-    reader.readAsDataURL(file);
-  });
-}
+// Modules whose full results this page reads: evidence, timelines and the
+// parts a check could not read.
+const OUTCOME_MODULES = [...FORENSIC, "evidence"].filter((m) => !["filemeta", "wpscan", "apkscan"].includes(m));
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): number => (typeof v === "number" ? v : 0);
@@ -88,24 +93,28 @@ function bundleFormat(format: string): string {
   }
 }
 
-// ForensicsPage is where files and logs from an incident are looked into:
-// recorded with a provable chain of custody, checked, and read for signs of
-// attack. Originals are never changed.
+// ForensicsPage is where files, phones and logs from an incident are looked
+// into: recorded with a provable chain of custody, checked, and read for signs
+// of attack or known threats. Originals are never changed, and nothing the
+// evidence came from is ever contacted.
 export function ForensicsPage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const { tenantId } = useTenant();
   const engagements = useEngagements();
   const all = engagements.data?.engagements ?? [];
-  const chosen =
-    all.find((e) => e.id === search.engagement) ??
-    all.find((e) => e.status === "authorized") ??
-    all[0];
+  const [source, setSource] = useState<SourceId>("files");
+  const runs = useForensicRuns();
+
+  const quick = all.find(isQuickCase);
+  const picked = search.engagement ? all.find((e) => e.id === search.engagement) : undefined;
+  const value = !picked || isQuickCase(picked) ? QUICK_VALUE : picked.id;
+  const chosen = value === QUICK_VALUE ? quick : picked;
 
   const header = (
     <PageHeader
       title="Forensics"
-      description="Look into files and logs from an incident. Originals are never changed, and every item is fingerprinted and written to the activity log."
+      description="Look into files, phones and logs from an incident. Originals are never changed, every item is fingerprinted and written to the activity log, and nothing on a phone, server or network is ever contacted."
     />
   );
 
@@ -120,54 +129,318 @@ export function ForensicsPage() {
       </Stack>
     );
   }
-  if (!chosen) {
-    return (
-      <Stack gap="lg">
-        {header}
-        <Card>
-          <EmptyState
-            icon={<IconFileSearch size={22} />}
-            title="No engagement yet"
-            description="Evidence is kept inside an engagement, so its handling is on record. Create one first."
-          />
-        </Card>
-      </Stack>
-    );
-  }
+
+  const caseRuns = runs.filter((r) => r.tenantId === tenantId && chosen && r.engagementId === chosen.id);
+  const showing = caseRuns.filter((r) => !r.dismissed).slice(0, 2);
 
   return (
     <Stack gap="lg">
       {header}
-      <EngagementPicker
+      <CasePicker
         engagements={all}
-        value={chosen.id}
-        onChange={(id) => void navigate({ search: { engagement: id } })}
+        value={value}
+        onChange={(v) => void navigate({ search: v === QUICK_VALUE ? {} : { engagement: v } })}
       />
-      <Workbench key={`${tenantId}-${chosen.id}`} id={chosen.id} status={chosen.status} />
+      <SourceChooser value={source} onChange={setSource} />
+      <Uploader key={`${tenantId}-${source}-${value}`} source={source} chosen={chosen} quick={value === QUICK_VALUE} engagements={all} />
+      {showing.map((r) => (
+        <CheckRun key={r.id} run={r} />
+      ))}
+      <ThreatIndicators />
+      {chosen ? (
+        <CaseResults key={`${tenantId}-${chosen.id}`} id={chosen.id} name={chosen.name} runs={caseRuns} />
+      ) : (
+        <ResultsView caseId={undefined} caseName={QUICK_CASE} evidence={[]} findings={[]} gaps={[]} extras={null} />
+      )}
     </Stack>
   );
 }
 
-function Workbench({ id, status }: { id: string; status: string }) {
-  const { tenantId } = useTenant();
-  const start = useStartTest(id);
-  const { jobs } = useJobs(id);
-  const { findings } = useFindings(id);
-
-  const [files, setFiles] = useState<File[]>([]);
-  const [source, setSource] = useState("");
-  const [checkCore, setCheckCore] = useState(false);
-  const [testServers, setTestServers] = useState(true);
-  const [readLogs, setReadLogs] = useState(false);
-  const [matchThreats, setMatchThreats] = useState(false);
-  const [indicators, setIndicators] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-
-  // The full results of the forensics jobs: evidence items and log timelines.
-  const wanted = jobs.filter(
-    (j) => j.done && ["evidence", "triage", "logscan", "apkbackend"].includes(j.module),
+// SourceChooser asks where the evidence came from. Each choice swaps the
+// uploader and the checks that can run on it.
+function SourceChooser({ value, onChange }: { value: SourceId; onChange: (v: SourceId) => void }) {
+  return (
+    <Section
+      title={
+        <Group gap="xs">
+          What are you looking into?
+          <ToneBadge tone="brand" size="sm">
+            New
+          </ToneBadge>
+        </Group>
+      }
+      description="Pick where the evidence came from. Each source is read offline: Ares never talks to the phone, server or network it came from."
+    >
+      <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} spacing="sm" role="radiogroup" aria-label="Where the evidence came from">
+        {SOURCES.map((s) => {
+          const Icon = SOURCE_ICON[s.id]!;
+          const on = s.id === value;
+          return (
+            <UnstyledButton
+              key={s.id}
+              className="ares-source"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(s.id)}
+            >
+              <ThemeIcon variant={on ? "filled" : "light"} color={on ? "brand" : "gray"} size={30} radius="md">
+                <Icon size={17} />
+              </ThemeIcon>
+              <Text fw={600} size="sm" c={on ? "brand.8" : undefined}>
+                {s.title}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {s.blurb}
+              </Text>
+            </UnstyledButton>
+          );
+        })}
+      </SimpleGrid>
+    </Section>
   );
+}
+
+const MB = 1024 * 1024;
+
+// Uploader takes the evidence for the chosen source, reads it here, and starts
+// the checks. Under Quick check it files the evidence in the personal case,
+// creating it the first time.
+function Uploader({
+  source,
+  chosen,
+  quick,
+  engagements,
+}: {
+  source: SourceId;
+  chosen: Engagement | undefined;
+  quick: boolean;
+  engagements: Engagement[];
+}) {
+  const def = sourceDef(source);
+  const { tenantId } = useTenant();
+  const feeds = useFeeds(tenantId);
+  const ensureQuick = useEnsureQuickCase(engagements);
+  const [files, setFiles] = useState<File[]>([]);
+  const [origin, setOrigin] = useState("");
+  const [options, setOptions] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(def.options.map((o) => [o.id, o.on])),
+  );
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
+  const folderPicker = useRef<HTMLInputElement>(null);
+
+  const names = files.map((f) => f.name);
+  const visible = def.options.filter((o) => !o.when || o.when(names));
+  const total = files.reduce((n, f) => n + f.size, 0);
+  const tooBig =
+    source === "files"
+      ? files.find((f) => f.size > MAX_FILE_BYTES)
+      : files.find((f) => f.size > 1024 * MB);
+  const blocked = chosen && !quick && chosen.status !== "authorized";
+  const halted = chosen?.status === "halted";
+  const usingFeeds = feeds.filter((f) => f.inUse).length;
+
+  const choose = (list: FileList | null) => {
+    if (!list || list.length === 0) return;
+    setProblem(null);
+    setFiles([...list]);
+  };
+
+  const submit = async () => {
+    setProblem(null);
+    setBusy("Reading the evidence…");
+    try {
+      const enabled = Object.fromEntries(visible.map((o) => [o.id, options[o.id] === true]));
+      const plan = await planChecks({ source, files, origin: origin.trim(), options: enabled, feeds });
+      if (plan.checks.length === 0) {
+        setProblem(
+          "Nothing chosen is something these checks read." +
+            (plan.leftOut.length > 0 ? ` ${plan.leftOut.slice(0, 3).map((l) => `${l.name}: ${l.reason}.`).join(" ")}` : ""),
+        );
+        return;
+      }
+      setBusy("Starting the checks…");
+      const engagementId = quick ? await ensureQuick() : chosen!.id;
+      const jobs: ForensicRun["jobs"] = [];
+      for (const c of plan.checks) {
+        const res = await control.dispatchJob({
+          engagementId,
+          tenantId,
+          module: c.module,
+          actor: "operator",
+          targets: [],
+          params: c.params,
+        });
+        addPending({ jobId: res.jobId, engagementId, tenantId, module: c.module, targets: [] });
+        jobs.push({ jobId: res.jobId, module: c.module, label: c.label, running: c.running });
+      }
+      recordForensicRun({
+        id: crypto.randomUUID(),
+        tenantId,
+        engagementId,
+        source,
+        title: plan.title,
+        at: new Date().toISOString(),
+        jobs,
+        leftOut: plan.leftOut,
+      });
+      setFiles([]);
+      if (filePicker.current) filePicker.current.value = "";
+      if (folderPicker.current) folderPicker.current.value = "";
+    } catch (err) {
+      setProblem(errorText(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Section title={def.heading} description={def.intro}>
+      {blocked || halted ? (
+        <InfoNote title={halted ? "Testing was stopped" : "Permission is not recorded yet"}>
+          {halted
+            ? "No more evidence can be added to this case. What was recorded is kept below."
+            : "Evidence can be added once this engagement's permission is on file. Or choose Quick check to look into it on its own."}
+        </InfoNote>
+      ) : (
+        <Stack gap="md" maw={720}>
+          <Box>
+            <Text fw={600} size="sm" mb={2}>
+              {def.fileLabel}
+            </Text>
+            <Text size="xs" c="dimmed" mb={6}>
+              {def.fileHelp}
+            </Text>
+            <input ref={filePicker} type="file" multiple hidden onChange={(ev) => choose(ev.currentTarget.files)} />
+            <input
+              ref={folderPicker}
+              type="file"
+              hidden
+              onChange={(ev) => choose(ev.currentTarget.files)}
+              {...({ webkitdirectory: "", directory: "" } as object)}
+            />
+            <Box className="ares-dropzone">
+              {files.length === 0 ? (
+                <Group gap="sm">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    leftSection={<IconUpload size={16} />}
+                    onClick={() => filePicker.current?.click()}
+                  >
+                    {def.folder ? "Choose files or a ZIP" : "Choose files"}
+                  </Button>
+                  {def.folder && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      leftSection={<IconFolder size={16} />}
+                      onClick={() => folderPicker.current?.click()}
+                    >
+                      Choose a folder
+                    </Button>
+                  )}
+                </Group>
+              ) : (
+                <Group justify="space-between" wrap="nowrap" gap="sm">
+                  <Box style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={600} style={{ wordBreak: "break-word" }}>
+                      {files[0]!.webkitRelativePath
+                        ? `${files[0]!.webkitRelativePath.split("/")[0]} (folder)`
+                        : files.length === 1
+                          ? files[0]!.name
+                          : `${files[0]!.name} and ${files.length - 1} more`}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {plural(files.length, "file")} · {formatBytes(total)}
+                    </Text>
+                  </Box>
+                  <Button
+                    variant="subtle"
+                    color="gray"
+                    size="compact-sm"
+                    leftSection={<IconX size={14} />}
+                    onClick={() => setFiles([])}
+                  >
+                    Clear
+                  </Button>
+                </Group>
+              )}
+            </Box>
+            {tooBig && (
+              <Text size="sm" c="red.7" mt={6}>
+                {tooBig.name} is larger than {source === "files" ? "20 MB" : "1 GB"}.
+              </Text>
+            )}
+          </Box>
+          <TextInput
+            label="Where it came from (optional)"
+            description="The device, server or person it was collected from."
+            placeholder={def.placeholder}
+            value={origin}
+            onChange={(ev) => setOrigin(ev.currentTarget.value)}
+          />
+          <Box>
+            <Text fw={600} size="sm" mb={6}>
+              Also look into it
+            </Text>
+            <Stack gap="xs">
+              {visible.map((o) => (
+                <Checkbox
+                  key={o.id}
+                  label={o.label}
+                  description={
+                    o.id === "threats" && usingFeeds === 0
+                      ? `${o.description} No feed is loaded yet, so only suspicious-looking values are flagged.`
+                      : o.description
+                  }
+                  checked={options[o.id] === true}
+                  onChange={(ev) => {
+                    const v = ev.currentTarget.checked;
+                    setOptions((cur) => ({ ...cur, [o.id]: v }));
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+          {quick && (
+            <Text size="xs" c="dimmed">
+              By adding it you confirm the evidence is yours, or that its owner agreed to it being examined. That is
+              recorded in the Quick check activity log.
+            </Text>
+          )}
+          {problem && <ErrorNote title="The evidence could not be added">{problem}</ErrorNote>}
+          <Group>
+            <Button
+              leftSection={<IconUpload size={16} />}
+              loading={busy !== null}
+              disabled={files.length === 0 || !!tooBig}
+              onClick={() => void submit()}
+            >
+              {def.button}
+            </Button>
+            {busy && (
+              <Text size="sm" c="dimmed">
+                {busy}
+              </Text>
+            )}
+          </Group>
+        </Stack>
+      )}
+    </Section>
+  );
+}
+
+type Outcome = { r: { kind: string; capability: string; data?: JsonObject }; job: { jobId: string; module: string; at: string }; item: string };
+
+// CaseResults loads one case's evidence, findings and gaps.
+function CaseResults({ id, name, runs }: { id: string; name: string; runs: ForensicRun[] }) {
+  const { tenantId } = useTenant();
+  const { jobs } = useJobs(id);
+  const { findings } = useFindings(id, true);
+
+  const wanted = jobs.filter((j) => j.done && OUTCOME_MODULES.includes(j.module));
   const outcomes = useQueries({
     queries: wanted.map((j) => ({
       queryKey: ["outcome", tenantId, j.jobId],
@@ -177,7 +450,7 @@ function Workbench({ id, status }: { id: string; status: string }) {
   });
   // Each result remembers which uploaded item it belongs to: the custody
   // record comes first, then everything found in that item.
-  const results = outcomes.flatMap((o, i) => {
+  const results: Outcome[] = outcomes.flatMap((o, i) => {
     let item = "";
     return (o.data?.results ?? []).map((r) => {
       if (r.kind === "evidence") item = str(r.data?.["name"]);
@@ -185,206 +458,84 @@ function Workbench({ id, status }: { id: string; status: string }) {
     });
   });
   const evidence = results.filter(({ r }) => r.kind === "evidence");
-  const timelines = results.filter(
-    ({ r, job }) => job.module === "logscan" && Array.isArray(r.data?.["events"]),
-  );
-  const inventories = results.filter(
-    ({ r }) => r.capability === "wpscan" && r.kind === "info" && (r.data?.["plugins"] || r.data?.["themes"]),
-  );
-  const notes = results.filter(
-    ({ r }) => r.capability === "triage" && r.kind === "info" && str(r.data?.["title"]).startsWith("Triage note"),
-  );
-  const backends = wanted
-    .map((job, i) => ({ job, results: outcomes[i]?.data?.results ?? [] }))
-    .filter(({ job }) => job.module === "apkbackend")
-    .map(({ job, results: rs }) => {
-      const own = rs.filter((r) => r.capability === "apkbackend" && r.kind === "info");
-      return {
-        job,
-        summary: own.find((r) => r.data?.["package"] !== undefined || r.data?.["hosts"] !== undefined),
-        outside: objs(own.find((r) => Array.isArray(r.data?.["targets"]) && objs(r.data?.["targets"]).length > 0)?.data?.["targets"]),
-      };
-    })
-    .filter((b) => b.summary);
-  const apps = files.filter(isApp);
-  const running = jobs.filter((j) => !j.done && moduleInfo(j.module).forensic);
-  const forensicFindings = findings.filter((f) => FORENSIC.includes(f.module));
 
-  const tooBig = files.find((f) => f.size > MAX_FILE_BYTES);
-  const canAdd = status === "authorized";
-
-  const submit = async () => {
-    setProblem(null);
-    setBusy(true);
-    try {
-      const items = await Promise.all(
-        files.map(async (f) => ({
-          name: f.name,
-          base64: await readBase64(f),
-          ...(source.trim() ? { source: source.trim() } : {}),
-        })),
-      );
-      const params = { items } as unknown as JsonObject;
-      // One intake job records custody, opens bundles and checks every file.
-      await start.mutateAsync({
-        module: "triage",
-        targets: [],
-        params: { items, verifyWordPressCore: checkCore } as unknown as JsonObject,
-      });
-      if (testServers) {
-        for (const item of items.filter((it) => it.name.toLowerCase().endsWith(".apk"))) {
-          await start.mutateAsync({
-            module: "apkbackend",
-            targets: [],
-            params: { apkBase64: item.base64, name: item.name } as unknown as JsonObject,
-          });
-        }
-      }
-      if (readLogs) await start.mutateAsync({ module: "logscan", targets: [], params });
-      if (matchThreats) {
-        const texts = await Promise.all(files.map((f) => f.text()));
-        await start.mutateAsync({
-          module: "iocmatch",
-          targets: [],
-          params: {
-            observations: files.map((f, i) => ({ name: f.name, text: texts[i] ?? "" })),
-            indicators: indicators
-              .split("\n")
-              .map((l) => l.trim())
-              .filter((l) => l !== "")
-              .map((value) => ({ value })),
-          } as unknown as JsonObject,
-        });
-      }
-      setFiles([]);
-    } catch (err) {
-      setProblem(errorText(err));
-    } finally {
-      setBusy(false);
+  // What could not be checked: what was left out before sending, a file a
+  // check could not read, and a check that could not run at all.
+  const gaps: LeftOut[] = [];
+  for (const run of runs) gaps.push(...run.leftOut);
+  for (const { r } of results) {
+    const d = r.data ?? {};
+    if (r.kind !== "info") continue;
+    if (str(d["error"])) gaps.push({ name: str(d["name"]) || "A file", reason: str(d["description"]) || str(d["error"]) });
+    else if (r.capability === "triage" && str(d["title"]).startsWith("Triage note"))
+      gaps.push({ name: str(d["name"]), reason: str(d["description"]) });
+  }
+  for (const j of jobs) {
+    if (j.done && j.summary?.status === "error" && FORENSIC.includes(j.module)) {
+      gaps.push({ name: `The ${j.module} check`, reason: `it could not run: ${j.summary.error}` });
     }
-  };
+  }
+  const seen = new Set<string>();
+  const uniqueGaps = gaps.filter((g) => {
+    const k = `${g.name}|${g.reason}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 
+  return (
+    <ResultsView
+      caseId={id}
+      caseName={name}
+      evidence={evidence}
+      findings={findings.filter((f) => FORENSIC.includes(f.module))}
+      gaps={uniqueGaps}
+      extras={<Extras results={results} wanted={wanted} outcomes={outcomes.map((o) => o.data?.results ?? [])} />}
+    />
+  );
+}
+
+function ResultsView({
+  caseId,
+  caseName,
+  evidence,
+  findings,
+  gaps,
+  extras,
+}: {
+  caseId: string | undefined;
+  caseName: string;
+  evidence: Outcome[];
+  findings: FindingRecord[];
+  gaps: LeftOut[];
+  extras: ReactNode;
+}) {
   return (
     <>
       <Section
-        title="Add evidence"
-        description="Choose files or whole bundles. Each one is fingerprinted the moment it arrives, bundles are opened safely, and every file inside is checked for what it really is."
-      >
-        {!canAdd && (
-          <InfoNote
-            title={status === "halted" ? "Testing was stopped" : "Permission is not recorded yet"}
-          >
-            {status === "halted"
-              ? "No more evidence can be added to this engagement. What was recorded is kept below."
-              : "Evidence can be added once this engagement's scope and permission are on file."}
-          </InfoNote>
-        )}
-        {canAdd && (
-          <Stack gap="md" maw={640}>
-            <FileInput
-              label="Files"
-              description="Any file, or a bundle: ZIP, TAR, TAR.GZ or 7-Zip. A website backup such as WordPress and Android apps (APK) get their own checks. Up to 20 MB each."
-              placeholder="Choose one or more files"
-              leftSection={<IconUpload size={16} />}
-              multiple
-              clearable
-              value={files}
-              onChange={setFiles}
-              error={tooBig ? `${tooBig.name} is larger than 20 MB.` : undefined}
-            />
-            <TextInput
-              label="Where it came from (optional)"
-              description="The device, server or person the files were collected from."
-              placeholder="Web server 2, collected by Dana Reyes"
-              value={source}
-              onChange={(ev) => setSource(ev.currentTarget.value)}
-            />
-            <Box>
-              <Text fw={600} size="sm" mb={6}>
-                Also look into them
-              </Text>
-              <Stack gap="xs">
-                <Checkbox
-                  label="Compare WordPress files with the official ones"
-                  description="Spots changed or added core files in a WordPress backup. Asks wordpress.org for the official list, so it needs internet access."
-                  checked={checkCore}
-                  onChange={(ev) => setCheckCore(ev.currentTarget.checked)}
-                />
-                {apps.length > 0 && (
-                  <Checkbox
-                    label="Find and test the servers this app talks to"
-                    description="Works out the app's servers from its contents. Only servers inside this engagement's scope are tested."
-                    checked={testServers}
-                    onChange={(ev) => setTestServers(ev.currentTarget.checked)}
-                  />
-                )}
-                <Checkbox
-                  label="Read them as logs"
-                  description="Finds signs of attack in log files and puts them in order as a timeline."
-                  checked={readLogs}
-                  onChange={(ev) => setReadLogs(ev.currentTarget.checked)}
-                />
-                <Checkbox
-                  label="Compare with known threats"
-                  description="Looks for file fingerprints, addresses and domains that are known to be bad."
-                  checked={matchThreats}
-                  onChange={(ev) => setMatchThreats(ev.currentTarget.checked)}
-                />
-              </Stack>
-            </Box>
-            {matchThreats && (
-              <Textarea
-                label="Your list of known threats (optional)"
-                description="One per line: a file fingerprint, a domain, a web address or an IP address. Without a list, only suspicious-looking addresses are flagged."
-                autosize
-                minRows={2}
-                value={indicators}
-                onChange={(ev) => setIndicators(ev.currentTarget.value)}
-                styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
-              />
-            )}
-            {problem && <ErrorNote title="The evidence could not be added">{problem}</ErrorNote>}
-            <Group>
-              <Button
-                leftSection={<IconUpload size={16} />}
-                loading={busy}
-                disabled={files.length === 0 || !!tooBig}
-                onClick={() => void submit()}
-              >
-                Add evidence
-              </Button>
-              {running.length > 0 && (
-                <Text size="sm" c="dimmed" aria-live="polite">
-                  {workingLabel(running)}
-                </Text>
-              )}
-            </Group>
-          </Stack>
-        )}
-      </Section>
-
-      <Section
         flush
         title="Evidence and chain of custody"
-        description="Every item recorded in this engagement. The fingerprint is also written to the activity log, which cannot be edited."
+        description="Every item recorded in this case. The fingerprint is also written to the activity log, which cannot be edited."
         aside={
-          <Link to="/activity" search={{ engagement: id }} className="ares-link">
-            See the record
-          </Link>
+          caseId ? (
+            <Link to="/activity" search={{ engagement: caseId }} className="ares-link">
+              See the record
+            </Link>
+          ) : undefined
         }
       >
         {evidence.length === 0 ? (
           <EmptyState
             icon={<IconFileSearch size={22} />}
             title="No evidence yet"
-            description="Files you add are listed here with their fingerprint, size and when they were recorded."
+            description="What you add is listed here with its fingerprint, size and when it was recorded."
           />
         ) : (
           <Table.ScrollContainer minWidth={760}>
             <Table className="ares-stack">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>File</Table.Th>
+                  <Table.Th>Item</Table.Th>
                   <Table.Th>Size</Table.Th>
                   <Table.Th>Fingerprint (SHA-256)</Table.Th>
                   <Table.Th miw={180}>Came from</Table.Th>
@@ -404,50 +555,52 @@ function Workbench({ id, status }: { id: string; status: string }) {
                       : str(d["contentType"]).split(";")[0];
                   return (
                     <Fragment key={`${job.jobId}-${i}`}>
-                    <Table.Tr style={bundle ? { borderBottom: 0 } : undefined}>
-                      <Table.Td data-primary>
-                        <Text fw={600} style={{ wordBreak: "break-word" }}>
-                          {str(d["name"])}
-                        </Text>
-                        <Text size="sm" c="dimmed">
-                          {kind}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td data-label="Size" style={{ whiteSpace: "nowrap" }}>{formatBytes(num(d["size"]))}</Table.Td>
-                      <Table.Td data-label="Fingerprint">
-                        <CopyButton value={sha}>
-                          {({ copied, copy }) => (
-                            <Tooltip label={copied ? "Copied" : "Copy the full fingerprint"}>
-                              <Code
-                                component="button"
-                                onClick={copy}
-                                style={{ cursor: "pointer", border: 0 }}
-                                aria-label={`Copy the fingerprint of ${str(d["name"])}`}
-                              >
-                                {sha.slice(0, 16)}…
-                              </Code>
-                            </Tooltip>
-                          )}
-                        </CopyButton>
-                      </Table.Td>
-                      <Table.Td data-label="Came from">
-                        <Text size="sm" c="dimmed">
-                          {str(d["source"]) || "Not stated"}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td data-label="Recorded" style={{ whiteSpace: "nowrap" }}>
-                        <Text size="sm" c="dimmed">
-                          {formatWhen(str(d["ingestedAt"]) || job.at)}
-                        </Text>
-                      </Table.Td>
-                    </Table.Tr>
-                    {bundle && (
-                      <Table.Tr>
-                        <Table.Td data-primary colSpan={5} pt={0}>
-                          <BundleContents data={d} />
+                      <Table.Tr style={bundle ? { borderBottom: 0 } : undefined}>
+                        <Table.Td data-primary>
+                          <Text fw={600} style={{ wordBreak: "break-word" }}>
+                            {name}
+                          </Text>
+                          <Text size="sm" c="dimmed">
+                            {kind}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td data-label="Size" style={{ whiteSpace: "nowrap" }}>
+                          {formatBytes(num(d["size"]))}
+                        </Table.Td>
+                        <Table.Td data-label="Fingerprint">
+                          <CopyButton value={sha}>
+                            {({ copied, copy }) => (
+                              <Tooltip label={copied ? "Copied" : "Copy the full fingerprint"}>
+                                <Code
+                                  component="button"
+                                  onClick={copy}
+                                  style={{ cursor: "pointer", border: 0 }}
+                                  aria-label={`Copy the fingerprint of ${name}`}
+                                >
+                                  {sha.slice(0, 16)}…
+                                </Code>
+                              </Tooltip>
+                            )}
+                          </CopyButton>
+                        </Table.Td>
+                        <Table.Td data-label="Came from">
+                          <Text size="sm" c="dimmed">
+                            {str(d["source"]) || "Not stated"}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td data-label="Recorded" style={{ whiteSpace: "nowrap" }}>
+                          <Text size="sm" c="dimmed">
+                            {formatWhen(str(d["ingestedAt"]) || job.at)}
+                          </Text>
                         </Table.Td>
                       </Table.Tr>
-                    )}
+                      {bundle && (
+                        <Table.Tr>
+                          <Table.Td data-primary colSpan={5} pt={0}>
+                            <BundleContents data={d} />
+                          </Table.Td>
+                        </Table.Tr>
+                      )}
                     </Fragment>
                   );
                 })}
@@ -460,36 +613,102 @@ function Workbench({ id, status }: { id: string; status: string }) {
       <Section
         flush
         title="What the checks found"
-        description="Signs of tampering, attack or known threats in the evidence, most serious first."
+        description="Signs of known spyware, tampering, attack or known threats in the evidence, most serious first."
+        aside={
+          <Box visibleFrom="sm">
+            <ShareIndicators caseId={caseId} caseName={caseName} findings={findings} />
+          </Box>
+        }
       >
-        {forensicFindings.length === 0 ? (
+        <Box hiddenFrom="sm" px="lg" pb="md">
+          <ShareIndicators caseId={caseId} caseName={caseName} findings={findings} />
+        </Box>
+        {findings.length === 0 ? (
           <EmptyState
             title="Nothing found yet"
-            description="Anything suspicious in the files you add is listed here, with what it means and how to respond."
+            description="Anything suspicious in what you add is listed here, with what it means and how to respond."
           />
         ) : (
-          <FindingsTable findings={forensicFindings} />
+          <FindingsTable findings={findings} extra={(f) => <ProvenanceTag raw={f.finding.raw} />} />
         )}
       </Section>
 
-      {notes.length > 0 && (
-        <InfoNote title="Some files could not be fully checked">
-          <Stack gap={4}>
-            {notes.map(({ r }, i) => (
+      <Section
+        title="What could not be checked"
+        description="A gap is never reported as clean. These parts could not be read, so nothing is claimed about them."
+      >
+        {gaps.length > 0 && (
+          <Stack gap={6}>
+            {gaps.slice(0, 50).map((g, i) => (
               <Text key={i} size="sm">
-                <b>{str(r.data?.["name"])}</b>: {str(r.data?.["description"])}
+                <b style={{ wordBreak: "break-word" }}>{g.name}</b>: {g.reason}
               </Text>
             ))}
+            {gaps.length > 50 && (
+              <Text size="sm" c="dimmed">
+                And {gaps.length - 50} more.
+              </Text>
+            )}
           </Stack>
-        </InfoNote>
-      )}
+        )}
+        <Group
+          gap="sm"
+          wrap="nowrap"
+          align="flex-start"
+          p="sm"
+          style={{ border: "1px solid var(--ares-line)", borderRadius: 8 }}
+        >
+          <IconAlertTriangle size={16} style={{ flex: "none", marginTop: 2, color: "var(--mantine-color-dimmed)" }} />
+          <Text size="sm" c="dimmed">
+            {gaps.length === 0 && evidence.length > 0 ? "Every check that ran could read what it was given. " : ""}A
+            clean result covers only what was read. It does not mean the device is clean. Grade-A mercenary spyware is
+            built to defeat a check like this, so a concrete suspicion needs expert forensic help (Amnesty Security Lab,
+            Access Now's Digital Security Helpline, Citizen Lab).
+          </Text>
+        </Group>
+      </Section>
 
+      {extras}
+    </>
+  );
+}
+
+// Extras are the per-check details the older checks report: app servers,
+// WordPress parts and log timelines.
+function Extras({
+  results,
+  wanted,
+  outcomes,
+}: {
+  results: Outcome[];
+  wanted: { jobId: string; module: string }[];
+  outcomes: { kind: string; capability: string; data?: JsonObject }[][];
+}) {
+  const timelines = results.filter(({ r, job }) => job.module === "logscan" && Array.isArray(r.data?.["events"]));
+  const inventories = results.filter(
+    ({ r }) => r.capability === "wpscan" && r.kind === "info" && (r.data?.["plugins"] || r.data?.["themes"]),
+  );
+  const backends = wanted
+    .map((job, i) => ({ job, results: outcomes[i] ?? [] }))
+    .filter(({ job }) => job.module === "apkbackend")
+    .map(({ job, results: rs }) => {
+      const own = rs.filter((r) => r.capability === "apkbackend" && r.kind === "info");
+      return {
+        job,
+        summary: own.find((r) => r.data?.["package"] !== undefined || r.data?.["hosts"] !== undefined),
+        outside: objs(own.find((r) => Array.isArray(r.data?.["targets"]) && objs(r.data?.["targets"]).length > 0)?.data?.["targets"]),
+      };
+    })
+    .filter((b) => b.summary);
+
+  return (
+    <>
       {backends.map(({ job, summary, outside }) => (
         <AppBackend key={job.jobId} data={summary!.data ?? {}} outside={outside} />
       ))}
 
-      {inventories.map(({ r, job }, i) => (
-        <WordPressParts key={`${job.jobId}-wp-${i}`} data={r.data ?? {}} bundle={str(r.data?.["bundle"]) || inventories[i]!.item} />
+      {inventories.map(({ r, job, item }, i) => (
+        <WordPressParts key={`${job.jobId}-wp-${i}`} data={r.data ?? {}} bundle={str(r.data?.["bundle"]) || item} />
       ))}
 
       {timelines.map(({ r, job }, i) => {
@@ -738,14 +957,4 @@ function WordPressParts({ data, bundle }: { data: JsonObject; bundle: string }) 
       )}
     </Section>
   );
-}
-
-// What the running checks have left, by the one that will finish last. A
-// check with no estimate yet keeps the plain "Working on it…".
-function workingLabel(running: Job[]): string {
-  const est = running.map((j) => j.progress);
-  if (est.some((p) => !p || p.state !== "estimate")) return "Working on it…";
-  const last = est.reduce((a, b) => (b!.remainingHighSeconds > a!.remainingHighSeconds ? b : a));
-  const left = timeLeft(last);
-  return left ? `Working on it. ${left.short}${left.by ? `, done around ${left.by}` : ""}.` : "Working on it…";
 }
