@@ -32,6 +32,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
+	"github.com/gsoultan/ares-server/internal/agent"
 	"github.com/gsoultan/ares-server/internal/api"
 	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/connectapi"
@@ -227,6 +228,18 @@ func main() {
 	// audit trail are identical whichever surface a client uses.
 	grpcHandler := connectapi.New(store, reg, q, outcomes)
 	grpcHandler.WithAuth(authSvc)
+	// Agent registry: an agent may act only while its engagement can run. The
+	// operator-facing agent-management RPCs are served on the ControlPlane; the
+	// agent-facing AgentService is wired separately.
+	agentReg := agent.NewRegistry(func(tenantID, engagementID string) bool {
+		eng, ok := store.Get(engagementID)
+		if !ok || eng.TenantID != engagement.ResolveTenant(tenantID) {
+			return false
+		}
+		runnable, _ := eng.CanRun()
+		return runnable
+	})
+	grpcHandler.WithAgents(agentReg)
 	if settingsSvc != nil {
 		grpcHandler.WithSettings(settingsSvc)
 	}
@@ -276,6 +289,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle(grpcPath, grpcHTTP)
+	// The agent-facing AgentService is served on its own endpoint behind the
+	// agent-credential interceptor (outbound-initiated by enrolled agents).
+	agentCred := connectapi.NewAgentCredentialInterceptor(agentReg)
+	agentPath, agentHTTP := aresv1connect.NewAgentServiceHandler(
+		connectapi.NewAgentServer(agentReg, store, outcomes),
+		connect.WithReadMaxBytes(int(maxReqBytes)),
+		connect.WithInterceptors(agentCred))
+	mux.Handle(agentPath, agentHTTP)
 	// The collaborator records out-of-band callbacks under /c/; the more specific
 	// pattern takes precedence over the REST catch-all at "/".
 	mux.Handle("/c/", canaryStore.Handler())

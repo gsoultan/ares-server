@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	"github.com/gsoultan/ares-server/internal/agent"
 	"github.com/gsoultan/ares-server/internal/ai"
 	"github.com/gsoultan/ares-server/internal/audit"
 	"github.com/gsoultan/ares-server/internal/auth"
@@ -58,6 +59,7 @@ type Handler struct {
 	settings *settings.Service // nil until a master key is available (pre-setup)
 	auth     *auth.Service     // nil disables the auth RPCs
 	setup    *setup.Service    // nil disables the setup RPCs
+	agents   *agent.Registry   // nil disables the agent-management RPCs
 }
 
 // compile-time check that Handler satisfies the generated interface.
@@ -113,6 +115,13 @@ func (h *Handler) WithAuth(a *auth.Service) *Handler {
 // WithSetup attaches the first-run setup service.
 func (h *Handler) WithSetup(s *setup.Service) *Handler {
 	h.setup = s
+	return h
+}
+
+// WithAgents attaches the agent registry (the engagement "Agents" view and
+// install-key management). Until one is attached the agent RPCs are unavailable.
+func (h *Handler) WithAgents(r *agent.Registry) *Handler {
+	h.agents = r
 	return h
 }
 
