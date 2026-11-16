@@ -4,7 +4,7 @@ import { IconDownload, IconLock, IconShieldCheck } from "@tabler/icons-react";
 import type { Exchange, Proof, ProofCheck } from "../../gen/ares/v1/ares_pb.ts";
 import { errorText, formatWhen, proofState, proofStateInfo, proofWhy, toneColor } from "../../lib/labels.ts";
 import type { Approval } from "../../lib/findings.ts";
-import { ErrorNote, GoodNote, Section, StatusBadge, ToneBadge } from "../../ui/index.tsx";
+import { ErrorNote, GoodNote, Section, StatusBadge, ToneBadge, WarnNote } from "../../ui/index.tsx";
 import { downloadBytes } from "../engagement/HeaderActions.tsx";
 import { useProofDownload } from "../workspace/data.ts";
 import { Facts } from "./FindingParts.tsx";
@@ -57,7 +57,12 @@ export function ProofPanel({
           : "How you can be sure this is real: what Ares sent, what came back, and why nothing else could explain it.")
       }
     >
-      {state === "proven" && (
+      {proof.cleanup && !proof.cleanup.performed ? (
+        <WarnNote title="A test marker may still be on the target">
+          Ares placed one harmless marker to prove this but could not confirm it was removed.
+          {proof.cleanup.detail ? ` ${proof.cleanup.detail}.` : ""} Check for it and delete it.
+        </WarnNote>
+      ) : state === "proven" && !approval && (
         <GoodNote title="Nothing was damaged to get this proof" icon={<IconShieldCheck size={18} />}>
           {proof.cleanup?.performed
             ? `Ares placed one harmless marker to prove this and removed it again${
@@ -80,7 +85,7 @@ export function ProofPanel({
         </SimpleGrid>
       )}
 
-      {!proof.control && (proof.sent || proof.received || proof.callback || proof.computed) && (
+      {!(proof.control?.sent || proof.control?.received) && (proof.sent || proof.received || proof.callback || proof.computed) && (
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
           <Step n={1} title="What Ares sent">
             {proof.sent ? (

@@ -47,6 +47,9 @@ export function FindingDetail({
   const proofInfo = proofStateInfo(proofState(record.proof?.kind));
   const { jobs } = useJobs(record.engagementId);
   const [recheckJob, setRecheckJob] = useState<string | null>(null);
+  // Whether the running re-check is the finding's own proof probe.
+  const [viaProbe, setViaProbe] = useState(false);
+  const [noProbe, setNoProbe] = useState(false);
 
   const setStatus = useSetFindingStatus();
   const { fetching } = useFindings(record.engagementId);
@@ -56,7 +59,10 @@ export function FindingDetail({
   const settled = !!recheck?.done && !fetching;
   const failed = settled && !!recheck.summary?.error;
   const skipped = settled && !failed && recheck.summary?.allowed === 0;
-  const stillThere = settled && !failed && !skipped && !record.rechecked;
+  // A proof probe can be narrower than the test that found the finding, so its
+  // own result decides; a whole re-run is judged by the reloaded finding.
+  const stillThere =
+    settled && !failed && !skipped && (viaProbe ? (recheck.summary?.findings ?? 0) > 0 : !record.rechecked);
 
   // A finding that was marked fixed but shows up again is open again.
   const reopen = stillThere && record.status === "fixed";
@@ -72,14 +78,29 @@ export function FindingDetail({
   const rerunTest = () =>
     start.mutate(
       { module: record.module, targets: [record.target] },
-      { onSuccess: (jobId) => setRecheckJob(jobId) },
+      {
+        onSuccess: (jobId) => {
+          setViaProbe(false);
+          setRecheckJob(jobId);
+        },
+      },
     );
-  const onRecheck = () =>
-    hasProbe
-      ? reproduce.mutate(undefined, {
-          onSuccess: (jobId) => (jobId ? setRecheckJob(jobId) : test.targets !== null && rerunTest()),
-        })
-      : rerunTest();
+  const onRecheck = () => {
+    setNoProbe(false);
+    if (!hasProbe) return rerunTest();
+    reproduce.mutate(undefined, {
+      onSuccess: (jobId) => {
+        if (jobId) {
+          setViaProbe(true);
+          setRecheckJob(jobId);
+        } else if (test.targets !== null) {
+          rerunTest();
+        } else {
+          setNoProbe(true);
+        }
+      },
+    });
+  };
   const recheckError = start.error ?? reproduce.error;
 
   const proof = [
@@ -193,6 +214,11 @@ export function FindingDetail({
         </WarnNote>
       )}
 
+      {noProbe && (
+        <InfoNote title="This finding cannot be re-checked on its own">
+          Its proof cannot be repeated by itself. Run its test again from Run tests to check it.
+        </InfoNote>
+      )}
       {recheckError && (
         <ErrorNote title="The re-check could not start">{errorText(recheckError)}</ErrorNote>
       )}

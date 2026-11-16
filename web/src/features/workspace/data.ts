@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { control } from "../../client.ts";
 import type { JobProgress, JobSummary, Proof, ProofCheck } from "../../gen/ares/v1/ares_pb.ts";
-import { addPending } from "../../lib/local.ts";
 import { severityRank, toApproval, toFinding, type Approval, type Finding } from "../../lib/findings.ts";
 import type { StatusInfo } from "../../lib/labels.ts";
-import { dropPending, usePending } from "../../lib/local.ts";
+import { addPending, dropPending, usePending } from "../../lib/local.ts";
 import { useTenant } from "../../tenant.tsx";
 
 // The data every workspace screen shares: the engagements, the tests that ran,
