@@ -127,3 +127,32 @@ export function aiAllowed(tenantId: string, engagementId: string): boolean {
 export function allowAi(tenantId: string, engagementId: string) {
   if (!aiAllowed(tenantId, engagementId)) aiConsent.set([...aiConsent.get(), `${tenantId}/${engagementId}`]);
 }
+
+// Forensic check runs started here: which jobs belong together, what they
+// were called, and what Ares left out before sending them, so "What could not
+// be checked" survives a reload.
+export interface ForensicRun {
+  id: string;
+  tenantId: string;
+  engagementId: string;
+  source: string;
+  title: string;
+  at: string; // RFC3339
+  jobs: { jobId: string; module: string; label: string; running: string }[];
+  leftOut: { name: string; reason: string }[];
+  dismissed?: boolean;
+}
+
+const forensicRuns = createStore<ForensicRun[]>("ares.forensics.runs", []);
+
+export function useForensicRuns(): ForensicRun[] {
+  return useStore(forensicRuns);
+}
+
+export function recordForensicRun(run: ForensicRun) {
+  forensicRuns.set([run, ...forensicRuns.get().filter((r) => r.id !== run.id)].slice(0, 30));
+}
+
+export function dismissForensicRun(id: string) {
+  forensicRuns.set(forensicRuns.get().map((r) => (r.id === id ? { ...r, dismissed: true } : r)));
+}

@@ -13,12 +13,16 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -28,6 +32,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
+	"github.com/gsoultan/ares-server/internal/agent"
 	"github.com/gsoultan/ares-server/internal/api"
 	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/connectapi"
@@ -45,6 +50,8 @@ import (
 )
 
 func main() {
+	setMemoryLimit()
+
 	addr := os.Getenv("ARES_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -90,6 +97,7 @@ func main() {
 	var userStore auth.UserStore
 	var sessionStore auth.SessionStore
 	var setupStore setup.Store
+	var outcomeBackend worker.OutcomeBackend // nil: in-memory outcomes (ARES_DB=memory)
 	dbPath := os.Getenv("ARES_DB")
 	if dbPath == "" {
 		// ARES_PG_URL is the dedicated Postgres DSN (what the dev script exports);
@@ -119,6 +127,7 @@ func main() {
 		userStore = ps.Users()
 		sessionStore = ps.Sessions()
 		setupStore = ps.Setup()
+		outcomeBackend = ps.Outcomes()
 		log.Print("ares store: postgres")
 	default:
 		ss, err := stormstore.Open(dbPath)
@@ -131,12 +140,26 @@ func main() {
 		userStore = ss.Users()
 		sessionStore = ss.Sessions()
 		setupStore = ss.Setup()
+		outcomeBackend = ss.Outcomes()
 		log.Printf("ares store: storm at %s", dbPath)
 	}
 
 	// Authentication: built-in email + password with server-side sessions,
 	// available whether or not setup has run (so the super-admin can log in right
 	// after setup).
+	//
+	// Sessions and accounts are read through a seconds-long in-process cache:
+	// every request authenticates, and against Postgres that was a round trip
+	// (two with the per-request account check) before any handler ran. Writes
+	// through the service evict at once, so logout, disable and role changes
+	// still apply on the next request; the TTL only bounds how long a change
+	// made by another server process can take to be seen.
+	// ARES_AUTH_CACHE_TTL sets it (e.g. "5s"); "0" or "off" disables the cache.
+	rawSessions := sessionStore
+	if ttl, on := authCacheTTL(os.Getenv("ARES_AUTH_CACHE_TTL")); on {
+		userStore = auth.CachedUsers(userStore, ttl)
+		sessionStore = auth.CachedSessions(sessionStore, ttl)
+	}
 	authSvc := auth.NewService(userStore, sessionStore)
 
 	// The in-app settings store needs the master encryption key to seal and open
@@ -154,7 +177,18 @@ func main() {
 	}
 
 	q := queue.New(256)
-	outcomes := worker.NewMemOutcomes()
+	// Job outcomes: persisted (compressed) when there is a datastore, so results
+	// and findings survive a restart, with a bounded in-memory cache of recently
+	// used engagements' outcomes (ARES_OUTCOME_CACHE_RESULTS, in results).
+	var outcomes worker.OutcomeStore = worker.NewMemOutcomes()
+	if outcomeBackend != nil {
+		maxResults, _ := strconv.Atoi(os.Getenv("ARES_OUTCOME_CACHE_RESULTS"))
+		po, err := worker.NewPersistentOutcomes(outcomeBackend, maxResults)
+		if err != nil {
+			log.Fatalf("load job outcomes: %v", err)
+		}
+		outcomes = po
+	}
 	proc := worker.NewProcessor(reg, store)
 	pool := worker.NewPool(proc, outcomes, 8)
 
@@ -162,6 +196,18 @@ func main() {
 	defer stop()
 
 	go pool.Run(ctx, q.C())
+
+	// Reclaim sessions nobody will present again (they were never deleted).
+	if sw, ok := rawSessions.(auth.ExpiredSweeper); ok {
+		go auth.SweepExpiredSessions(ctx, sw, 15*time.Minute)
+	}
+
+	// Opt-in profiling on its own listener (keep it on loopback): set
+	// ARES_PPROF_ADDR=127.0.0.1:6060 and use `go tool pprof`. It is never mounted
+	// on the public mux.
+	if pprofAddr := os.Getenv("ARES_PPROF_ADDR"); pprofAddr != "" {
+		go servePprof(pprofAddr)
+	}
 
 	// Start the DNS collaborator when a domain and listen address are both set,
 	// so Log4Shell-style lookups can be observed. It is optional: without it,
@@ -182,6 +228,18 @@ func main() {
 	// audit trail are identical whichever surface a client uses.
 	grpcHandler := connectapi.New(store, reg, q, outcomes)
 	grpcHandler.WithAuth(authSvc)
+	// Agent registry: an agent may act only while its engagement can run. The
+	// operator-facing agent-management RPCs are served on the ControlPlane; the
+	// agent-facing AgentService is wired separately.
+	agentReg := agent.NewRegistry(func(tenantID, engagementID string) bool {
+		eng, ok := store.Get(engagementID)
+		if !ok || eng.TenantID != engagement.ResolveTenant(tenantID) {
+			return false
+		}
+		runnable, _ := eng.CanRun()
+		return runnable
+	})
+	grpcHandler.WithAgents(agentReg)
 	if settingsSvc != nil {
 		grpcHandler.WithSettings(settingsSvc)
 	}
@@ -225,10 +283,20 @@ func main() {
 	authInterceptor := connectapi.NewAuthInterceptor(authSvc, connectapi.ParseEnforceMode(os.Getenv("ARES_REQUIRE_AUTH")))
 	grpcPath, grpcHTTP := aresv1connect.NewControlPlaneHandler(grpcHandler,
 		connect.WithReadMaxBytes(int(maxReqBytes)),
-		connect.WithInterceptors(authInterceptor))
+		connect.WithInterceptors(authInterceptor),
+		compressionOption(os.Getenv("ARES_COMPRESSION")),
+		connect.WithCompressMinBytes(1024))
 
 	mux := http.NewServeMux()
 	mux.Handle(grpcPath, grpcHTTP)
+	// The agent-facing AgentService is served on its own endpoint behind the
+	// agent-credential interceptor (outbound-initiated by enrolled agents).
+	agentCred := connectapi.NewAgentCredentialInterceptor(agentReg)
+	agentPath, agentHTTP := aresv1connect.NewAgentServiceHandler(
+		connectapi.NewAgentServer(agentReg, store, outcomes),
+		connect.WithReadMaxBytes(int(maxReqBytes)),
+		connect.WithInterceptors(agentCred))
+	mux.Handle(agentPath, agentHTTP)
 	// The collaborator records out-of-band callbacks under /c/; the more specific
 	// pattern takes precedence over the REST catch-all at "/".
 	mux.Handle("/c/", canaryStore.Handler())
@@ -240,10 +308,17 @@ func main() {
 
 	// h2c lets plaintext HTTP/2 through, which true gRPC needs; behind TLS this
 	// is ordinary gRPC. REST and Connect also work over HTTP/1.1 on the same port.
+	// Idle keep-alive connections are closed after two minutes: with thousands
+	// of clients, each idle connection otherwise pins its buffers and goroutine
+	// for as long as the client keeps it open. Read/write timeouts stay unset
+	// on purpose, since large evidence uploads and report downloads are
+	// legitimately slow.
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           h2c.NewHandler(mux, &http2.Server{}),
+		Handler:           h2c.NewHandler(mux, &http2.Server{IdleTimeout: 2 * time.Minute}),
 		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    64 << 10,
 	}
 
 	go func() {
@@ -288,4 +363,90 @@ func loadSealer() (*secret.Sealer, error) {
 // rather than a local Storm file. Anything else is treated as a file path.
 func isPostgresDSN(v string) bool {
 	return strings.HasPrefix(v, "postgres://") || strings.HasPrefix(v, "postgresql://")
+}
+
+// servePprof serves the runtime profiles on a dedicated listener.
+func servePprof(addr string) {
+	m := http.NewServeMux()
+	m.HandleFunc("/debug/pprof/", pprof.Index)
+	m.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	m.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	m.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	m.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	srv := &http.Server{Addr: addr, Handler: m, ReadHeaderTimeout: 5 * time.Second}
+	log.Printf("ares pprof on %s", addr)
+	if err := srv.ListenAndServe(); err != nil {
+		log.Printf("pprof: %v", err)
+	}
+}
+
+// compressionOption picks how control-plane responses are compressed.
+// Compression was a third of the server's CPU under load (gzip at the default
+// level on every response, however small), so the default is the fastest gzip
+// level, which keeps most of the size win at a fraction of the cost, and
+// responses under 1 KiB are sent as they are. ARES_COMPRESSION=off turns
+// response compression off entirely (the cheapest choice when clients sit on
+// the same LAN or a TLS proxy compresses); "default" restores gzip's default
+// level.
+func compressionOption(mode string) connect.HandlerOption {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "off", "none":
+		return connect.WithCompression("gzip", nil, nil)
+	case "default":
+		return connect.WithCompression("gzip", newGzipReader, func() connect.Compressor { return gzip.NewWriter(io.Discard) })
+	default:
+		return connect.WithCompression("gzip", newGzipReader, newFastGzipWriter)
+	}
+}
+
+// newFastGzipWriter compresses responses at gzip.BestSpeed. connect pools the
+// writers, so the constructor's allocation is paid once per pooled writer.
+func newFastGzipWriter() connect.Compressor {
+	w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed) // a valid level never errors
+	return w
+}
+
+// newGzipReader decompresses gzip request bodies (as connect's default does).
+func newGzipReader() connect.Decompressor { return &gzip.Reader{} }
+
+// authCacheTTL parses ARES_AUTH_CACHE_TTL: empty means the default, "0" or
+// "off" turns the cache off, anything else is a Go duration.
+func authCacheTTL(v string) (time.Duration, bool) {
+	switch v = strings.TrimSpace(strings.ToLower(v)); v {
+	case "":
+		return auth.DefaultCacheTTL, true
+	case "0", "off", "none":
+		return 0, false
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		log.Printf("ignoring invalid ARES_AUTH_CACHE_TTL=%q", v)
+		return auth.DefaultCacheTTL, true
+	}
+	return d, true
+}
+
+// setMemoryLimit gives the Go runtime a soft memory limit when none is set:
+// 90% of the container's cgroup memory limit, if there is one. The garbage
+// collector then works harder as the heap nears the limit instead of letting
+// it grow until the container is OOM-killed, so the server can run in a small
+// memory allowance. GOMEMLIMIT, when set, wins (the runtime reads it itself).
+func setMemoryLimit() {
+	if os.Getenv("GOMEMLIMIT") != "" {
+		return
+	}
+	for _, f := range []string{"/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+		if err != nil || n <= 0 || n > 1<<50 { // "max" or an unlimited sentinel
+			return
+		}
+		limit := n / 10 * 9
+		debug.SetMemoryLimit(limit)
+		log.Printf("ares memory: soft limit %d MiB (90%% of the container's %d MiB)", limit>>20, n>>20)
+		return
+	}
 }

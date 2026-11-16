@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { control } from "../../client.ts";
-import type { JobSummary } from "../../gen/ares/v1/ares_pb.ts";
+import type { JobProgress, JobSummary } from "../../gen/ares/v1/ares_pb.ts";
 import { severityRank, toFinding, type Finding } from "../../lib/findings.ts";
 import type { StatusInfo } from "../../lib/labels.ts";
 import { dropPending, usePending } from "../../lib/local.ts";
@@ -33,6 +33,8 @@ export interface Job {
   done: boolean;
   // What it came to, once it is done.
   summary?: JobSummary;
+  // How far it has got and how long it has left, while it runs.
+  progress?: JobProgress;
 }
 
 // useJobs returns the tests run in this workspace, newest first, including
@@ -121,6 +123,7 @@ export function useJobs(engagementId?: string): { jobs: Job[]; loading: boolean 
         at: j.startedAt,
         done: j.status !== "running",
         summary: j.status === "running" ? undefined : j,
+        progress: j.status === "running" ? j.progress : undefined,
       })),
     );
     const known = new Set(done.map((j) => j.jobId));
@@ -165,7 +168,9 @@ export interface FindingRecord {
   rechecked: boolean;
 }
 
-export function useFindings(engagementId?: string): {
+// keepWithdrawn keeps a match to a withdrawn indicator: a note, not a
+// weakness, which the Forensics page lists for the record.
+export function useFindings(engagementId?: string, keepWithdrawn = false): {
   findings: FindingRecord[];
   loading: boolean;
   fetching: boolean;
@@ -191,13 +196,13 @@ export function useFindings(engagementId?: string): {
           rechecked: !f.stillPresent,
         }))
         // A note is not a weakness; it stays with its test's results.
-        .filter((f) => f.finding.severity !== "info")
+        .filter((f) => f.finding.severity !== "info" || (keepWithdrawn && f.finding.raw["withdrawn"] === true))
         .sort(
           (a, b) =>
             severityRank(a.finding.severity) - severityRank(b.finding.severity) ||
             b.foundAt.localeCompare(a.foundAt),
         ),
-    [list.data],
+    [list.data, keepWithdrawn],
   );
   return { findings, loading: list.isLoading, fetching: list.isFetching };
 }

@@ -12,8 +12,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -21,11 +23,46 @@ import (
 // probes, TLS verification is left ON: these are calls to the operator's own
 // trusted AI endpoint, not to a target. The proxy is taken from the environment
 // so deployments behind an egress proxy work unchanged.
-func newHTTPClient(timeout time.Duration) *http.Client {
+func newHTTPClient(timeout time.Duration, restrictPrivate bool) *http.Client {
+	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	if restrictPrivate && !AllowPrivateEndpoints() {
+		// Checked on the resolved address at connect time, so DNS rebinding
+		// cannot slip an internal address past the up-front endpoint check. The
+		// configured egress proxy itself stays reachable.
+		proxies := proxyIPs()
+		dialer.Control = func(_, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			ip := net.ParseIP(host)
+			if ip == nil {
+				return ErrPrivateEndpoint
+			}
+			if proxies[ip.String()] {
+				return nil
+			}
+			if isInternalIP(ip) {
+				return ErrPrivateEndpoint
+			}
+			return nil
+		}
+	}
 	return &http.Client{
 		Timeout: timeout,
+		// Never follow a redirect to another host with the provider key attached.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+				return http.ErrUseLastResponse
+			}
+			if len(via) >= 5 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
 		Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           dialer.DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          10,
 			IdleConnTimeout:       90 * time.Second,

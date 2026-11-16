@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package ares.v1;
+
+option go_package = "github.com/gsoultan/ares-server/internal/gen/ares/v1;aresv1";
+
+// AgentService is the control-plane API for the Ares agent: a small, transparent
+// component an operator deploys inside a target's network or on a host (with the
+// host owner's knowledge) to run authorized, inside-the-perimeter checks. It is
+// NOT an implant — see ares-design/agent-design.md and agent-prd.md.
+//
+// Every call is made BY an enrolled agent, outbound-initiated over HTTPS/443
+// (works behind NAT / proxies / tunnels, no inbound port on the target), and is
+// authenticated by the agent's issued credential. The interceptor binds each
+// call to the agent's {agent_id, tenant_id, engagement_id}; an agent can never
+// name another engagement, and a completed/halted engagement is refused.
+//
+// This file is the contract only. Regenerate the Go/TS bindings with
+// scripts/gen.sh (buf) before wiring the service into the server.
+service AgentService {
+  // Enroll redeems a one-time, engagement-scoped enrollment token (minted by an
+  // operator from the ControlPlane) and registers this agent. The agent sends
+  // its locally generated public key and host facts; the server issues a durable
+  // agent id and a scoped credential used for every later call. The enrollment
+  // token is single-use and spent on success.
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+
+  // Heartbeat reports agent health and version and returns the agent's current
+  // directive (keep running, or stop — e.g. the engagement was halted or the
+  // agent revoked). A missed-heartbeat window marks the agent stale in the UI.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // PullTasks opens a long-lived server stream over which the server delivers the
+  // capabilities it has authorized for this agent's engagement. The agent opens
+  // it outbound; the server never dials in.
+  rpc PullTasks(PullTasksRequest) returns (stream AgentTask);
+
+  // PushResults forwards the results of a completed task into the server's
+  // findings/forensics/audit pipeline, sealed per-tenant. It is idempotent on
+  // {task_id} so store-and-forward retries after a dropped link never
+  // double-report. Nothing of the engagement's data remains on the host.
+  rpc PushResults(PushResultsRequest) returns (PushResultsResponse);
+
+  // Deregister cleanly tears the agent down: it revokes the credential, and the
+  // agent then removes its service and wipes local state. Audited.
+  rpc Deregister(DeregisterRequest) returns (DeregisterResponse);
+}
+
+// Operator-facing agent management is served on the ControlPlane service (in
+// ares.proto), not here, because it is authenticated by the operator session,
+// not the agent credential. Planned additions (added in a follow-up once the
+// shared ControlPlane contract change is agreed):
+//   MintAgentKey(engagement, capabilities, consent) -> {key_id, install_key}
+//   CancelAgentKey(key_id)
+//   ListAgentKeys(engagement) -> unused install keys
+//   ListAgents(engagement) -> agents with status / host / consent / activity
+//   RemoveAgent(agent_id)   -> revoke + self-uninstall on next contact
+// The internal/agent registry already implements all of these.
+
+message HostFacts {
+  string hostname = 1;
+  string os = 2;          // "linux", "windows", "darwin"
+  string arch = 3;        // "amd64", "arm64"
+  string agent_version = 4;
+  // Non-identifying network context the operator needs to see what host and
+  // segment the agent sits on. No scan data here.
+  repeated string segment_cidrs = 5;
+  string ip = 6;          // the agent's own primary interface address
+}
+
+// Consent is the required record of the host owner's permission for an agent,
+// captured by the operator when they mint the install key (the "Add an agent —
+// permission" step) and carried for the agent's whole life. The agent is
+// transparent: the owner knows, and this record shows on the agent, in the
+// activity log and in the report.
+message Consent {
+  string who = 1;                    // who gave permission (name/role)
+  string how = 2;                    // how it was given (e.g. "signed authorization letter")
+  string auth_file_fingerprint = 3;  // hash of the attached authorization document
+  string recorded_by = 4;            // operator account that recorded it
+  string ends_at = 5;                // RFC3339 authorization end
+}
+
+message EnrollRequest {
+  string enrollment_token = 1;   // one-time, engagement-scoped
+  bytes public_key = 2;          // agent-generated; private key never leaves host
+  HostFacts host = 3;
+}
+
+message EnrollResponse {
+  bool ok = 1;
+  string agent_id = 2;
+  // credential the agent presents on every later call (mTLS cert material or a
+  // scoped bearer credential, per the design's credential decision).
+  string credential = 3;
+  string tenant_id = 4;
+  string engagement_id = 5;
+  // capabilities this agent is authorized to run (the per-agent allow-list).
+  repeated string capabilities = 6;
+  string error = 7;              // generic on failure
+}
+
+message HeartbeatRequest {
+  string agent_version = 1;
+  // bounded health signal only.
+  string status = 2;
+}
+
+enum AgentDirective {
+  AGENT_DIRECTIVE_UNSPECIFIED = 0;
+  AGENT_DIRECTIVE_CONTINUE = 1;   // keep running
+  AGENT_DIRECTIVE_STOP = 2;       // engagement halted / agent paused
+  AGENT_DIRECTIVE_DEREGISTER = 3; // revoked — tear down and uninstall
+}
+
+message HeartbeatResponse {
+  AgentDirective directive = 1;
+  // updated allow-list, if the operator changed the agent's authorized
+  // capabilities since enrollment.
+  repeated string capabilities = 2;
+}
+
+message PullTasksRequest {}
+
+message AgentTask {
+  string task_id = 1;
+  string capability = 2;         // must be on the agent's allow-list
+  // the engagement scope snapshot the agent enforces locally (the double
+  // barrier: agent-side gate, then module re-checks per target).
+  bytes scope_snapshot = 3;
+  // capability-specific parameters (targets, budgets).
+  bytes params = 4;
+}
+
+message PushResultsRequest {
+  string task_id = 1;            // idempotency key
+  // serialized module.Result values, the same the server worker produces.
+  bytes results = 2;
+  // targets the agent's local gate denied, for the audit trail.
+  bytes denied = 3;
+  string error = 4;
+}
+
+message PushResultsResponse {
+  bool ok = 1;
+  bool accepted = 2;             // false if the agent/engagement is no longer valid
+}
+
+message DeregisterRequest {
+  string reason = 1;             // "uninstall", "operator-revoke"
+}
+
+message DeregisterResponse { bool ok = 1; }

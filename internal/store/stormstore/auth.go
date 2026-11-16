@@ -192,3 +192,17 @@ func (r *SessionRepo) Delete(tokenHash string) error {
 	}
 	return nil
 }
+
+// DeleteForUser implements auth.SessionStore.
+func (r *SessionRepo) DeleteForUser(userID string) error {
+	var recs []sessionRecord
+	if err := r.db.Find("UserID", userID, &recs); err != nil && err != storm.ErrNotFound {
+		return fmt.Errorf("stormstore: find sessions: %w", err)
+	}
+	for i := range recs {
+		if err := r.db.DeleteStruct(&recs[i]); err != nil && err != storm.ErrNotFound {
+			return fmt.Errorf("stormstore: delete session: %w", err)
+		}
+	}
+	return nil
+}

@@ -3,6 +3,7 @@ syntax = "proto3";
 package ares.v1;
 
 import "google/protobuf/struct.proto";
+import "ares/v1/agent.proto";
 
 option go_package = "github.com/gsoultan/ares-server/internal/gen/ares/v1;aresv1";
 
@@ -84,6 +85,33 @@ service ControlPlane {
   rpc CreateUser(CreateUserRequest) returns (UserInfo);
   rpc SetUserRole(SetUserRoleRequest) returns (UserInfo);
   rpc SetUserDisabled(SetUserDisabledRequest) returns (UserInfo);
+
+  // Agent management (the engagement's "Agents" view). An agent is a transparent,
+  // authorized component deployed inside a target's network/host; these operator
+  // calls mint and manage its install keys and the agents themselves. The agent
+  // itself speaks the separate AgentService (agent.proto). See
+  // ares-design/agent-design.md and agent-prd.md.
+  //
+  // MintAgentKey records the required host-owner permission and creates a
+  // one-time install key scoped to the engagement with a capability allow-list.
+  rpc MintAgentKey(MintAgentKeyRequest) returns (MintAgentKeyResponse);
+  // CancelAgentKey withdraws an unused install key.
+  rpc CancelAgentKey(CancelAgentKeyRequest) returns (CancelAgentKeyResponse);
+  // ListAgentKeys lists the engagement's unused install keys.
+  rpc ListAgentKeys(ListAgentKeysRequest) returns (ListAgentKeysResponse);
+  // ListAgents lists the engagement's agents with status, host facts, consent and
+  // capability allow-list.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc GetAgent(GetAgentRequest) returns (AgentView);
+  // RemoveAgent revokes an agent immediately; it self-uninstalls on next contact.
+  // Findings it already sent are kept.
+  rpc RemoveAgent(RemoveAgentRequest) returns (RemoveAgentResponse);
+  // DispatchAgentJob queues an authorized check for an agent to run from inside
+  // the network. The server gate-checks it (engagement runnable, agent bound,
+  // module on the agent's capability allow-list) and sends the agent the
+  // engagement scope snapshot; the agent re-enforces the scope locally before
+  // touching any target. Results flow back into the same findings pipeline.
+  rpc DispatchAgentJob(DispatchAgentJobRequest) returns (DispatchAgentJobResponse);
 }
 
 // AdviseRequest asks the optional AI advisor to analyze engagement data.
@@ -584,6 +612,37 @@ message JobOutcome {
   // current_capability names the capability whose result arrived most recently
   // while status is "running"; empty once done. Lets a live view show motion.
   string current_capability = 9;
+  // progress is how far the job has got and how long it has left. Set while
+  // running and once done (state "done", with the final step count).
+  JobProgress progress = 10;
+}
+
+// JobProgress is a job's step count and an honest estimate of its time left:
+// a range, or no number at all ("estimating") until there is signal.
+message JobProgress {
+  // done of total steps, when the module counts its steps (0/0 otherwise).
+  // What a step is belongs to the module: a check, a port probe, a target.
+  int32 done = 1;
+  int32 total = 2;
+  // total_may_grow is true while the module may still add steps (recon before
+  // it has chosen its checks); done/total is then not a fraction of the run.
+  bool total_may_grow = 3;
+  // step names what is running now, when the module says ("tlscheck").
+  string step = 4;
+  // state: estimating | estimate | finishing | overdue | done.
+  //   estimating — not enough signal yet; show no number.
+  //   estimate   — remaining_low_seconds..remaining_high_seconds is left.
+  //   finishing  — every step is done; the job is wrapping up.
+  //   overdue    — past the top of the usual range for this check.
+  string state = 5;
+  // basis names the signal behind the estimate: "progress" (the job's own
+  // pace) or "history" (recent runs of the same check). Empty while estimating.
+  string basis = 6;
+  int64 remaining_low_seconds = 7;
+  int64 remaining_high_seconds = 8;
+  // elapsed_seconds is how long the job has run (its full duration once done).
+  int64 elapsed_seconds = 9;
+  string started_at = 10; // RFC3339
 }
 
 message ListJobsRequest {
@@ -602,6 +661,8 @@ message JobSummary {
   int32 denied = 7; // targets the gate refused
   int32 findings = 8; // findings the job raised
   string error = 9;
+  // progress is set for a job that has started; a queued job has none.
+  JobProgress progress = 10;
 }
 message ListJobsResponse {
   repeated JobSummary jobs = 1; // newest first
@@ -826,3 +887,92 @@ message GetPurpleTemplateRequest {
   string template_id = 2;
   string tenant_id = 3;
 }
+
+// ---- Agent management (operator-facing) ------------------------------------
+// Consent and HostFacts are defined in agent.proto (same ares.v1 package).
+
+enum AgentStatus {
+  AGENT_STATUS_UNSPECIFIED = 0;
+  AGENT_STATUS_CONNECTED = 1;      // healthy, idle
+  AGENT_STATUS_RUNNING_CHECK = 2;  // a capability is in flight
+  AGENT_STATUS_NOT_HEARD_FROM = 3; // missed the heartbeat window
+  AGENT_STATUS_REMOVED = 4;        // revoked / removed
+}
+
+message MintAgentKeyRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  // The capability allow-list for agents enrolled with this key. mitmexposure is
+  // off unless explicitly included.
+  repeated string capabilities = 3;
+  // Required host-owner permission record.
+  Consent consent = 4;
+}
+message MintAgentKeyResponse {
+  string key_id = 1;
+  // The one-time install key, returned once. Put it in the install command.
+  string install_key = 2;
+  string expires_at = 3; // RFC3339
+}
+
+message CancelAgentKeyRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string key_id = 3;
+}
+message CancelAgentKeyResponse { bool ok = 1; }
+
+message ListAgentKeysRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+}
+message AgentKeyView {
+  string key_id = 1;
+  repeated string capabilities = 2;
+  Consent consent = 3;
+  string created_at = 4; // RFC3339
+  string expires_at = 5; // RFC3339
+}
+message ListAgentKeysResponse { repeated AgentKeyView keys = 1; }
+
+message ListAgentsRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+}
+message AgentView {
+  string id = 1;
+  string tenant_id = 2;
+  string engagement_id = 3;
+  AgentStatus status = 4;
+  HostFacts host = 5;
+  repeated string capabilities = 6;
+  Consent consent = 7;
+  string current_capability = 8; // set when status is RUNNING_CHECK
+  string enrolled_at = 9;        // RFC3339
+  string last_seen = 10;         // RFC3339
+}
+message ListAgentsResponse { repeated AgentView agents = 1; }
+
+message GetAgentRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+}
+
+message RemoveAgentRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+}
+message RemoveAgentResponse { bool ok = 1; }
+
+message DispatchAgentJobRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  // module is the engine module to run (e.g. "portscan", "webcheck"); its
+  // capability group must be on the agent's allow-list.
+  string module = 4;
+  repeated Target targets = 5;
+}
+message DispatchAgentJobResponse { string task_id = 1; }

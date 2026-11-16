@@ -30,7 +30,7 @@ import (
 
 // All returns every model, for storm.Build and storm generate.
 func All() []any {
-	return []any{&Tenant{}, &Engagement{}, &User{}, &Session{}, &Setting{}, &SetupConfig{}}
+	return []any{&Tenant{}, &Engagement{}, &AuditEntry{}, &JobOutcome{}, &User{}, &Session{}, &Setting{}, &SetupConfig{}}
 }
 
 // Tenant is a client workspace.
@@ -45,11 +45,14 @@ func (t *Tenant) Schema(tb *storm.Table) { tb.PrimaryKey(&t.ID) }
 // EngagementDoc is the jsonb payload of an engagement: the parts whose shape is
 // nested and whose timestamps must survive at nanosecond precision.
 type EngagementDoc struct {
-	Status        string                      `json:"status"`
-	Authorization *engagement.Authorization   `json:"authorization,omitempty"`
-	Scope         scope.Snapshot              `json:"scope"`
-	Audit         []audit.Entry               `json:"audit"`
-	Detection     map[string]detection.Record `json:"detection,omitempty"`
+	Status        string                    `json:"status"`
+	Authorization *engagement.Authorization `json:"authorization,omitempty"`
+	Scope         scope.Snapshot            `json:"scope"`
+	// Audit is only read, from engagements written before the trail moved to
+	// its own append-only table (AuditEntry); Open migrates it out and new
+	// headers never carry it.
+	Audit     []audit.Entry               `json:"audit,omitempty"`
+	Detection map[string]detection.Record `json:"detection,omitempty"`
 }
 
 // Engagement is one assessment. Data is a jsonb document (see EngagementDoc).
@@ -64,6 +67,33 @@ type Engagement struct {
 func (e *Engagement) Schema(tb *storm.Table) {
 	tb.PrimaryKey(&e.ID)
 	tb.Index(&e.TenantID)
+}
+
+// AuditEntry is one entry of an engagement's hash-chained audit trail, stored
+// as its own append-only row so saving an engagement writes only the entries
+// added since the last save instead of rewriting the whole trail. Rows are
+// never updated or deleted; the chain is verified on load as before.
+type AuditEntry struct {
+	EngagementID string
+	Seq          int64
+	Entry        audit.Entry
+}
+
+func (a *AuditEntry) Schema(tb *storm.Table) { tb.PrimaryKey(&a.EngagementID, &a.Seq) }
+
+// JobOutcome is one finished job's outcome (its gate decision and results),
+// stored compressed (worker.EncodeOutcome). They used to live only in memory
+// and were lost on restart, with the findings derived from them.
+type JobOutcome struct {
+	JobID        string
+	EngagementID string
+	StartedAt    time.Time
+	Data         []byte
+}
+
+func (j *JobOutcome) Schema(tb *storm.Table) {
+	tb.PrimaryKey(&j.JobID)
+	tb.Index(&j.EngagementID)
 }
 
 // User is an account. Email carries a unique constraint so the database enforces
@@ -98,7 +128,13 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-func (s *Session) Schema(tb *storm.Table) { tb.PrimaryKey(&s.TokenHash) }
+// Sessions are looked up by token hash; user_id serves revoking every session
+// of an account, expires_at the periodic sweep of expired sessions.
+func (s *Session) Schema(tb *storm.Table) {
+	tb.PrimaryKey(&s.TokenHash)
+	tb.Index(&s.UserID)
+	tb.Index(&s.ExpiresAt)
+}
 
 // Setting is one workspace's settings. Secrets are stored already sealed
 // (ciphertext) in the jsonb payload, so the database never holds a plaintext
