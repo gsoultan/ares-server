@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Box, Table, Text } from "@mantine/core";
 import { IconChevronRight } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -10,10 +11,14 @@ import { findingState, findingStateInfo, type FindingRecord } from "../workspace
 export function FindingsTable({
   findings,
   engagementNames,
+  extra,
 }: {
   findings: FindingRecord[];
   // When given, a column says which engagement each finding belongs to.
   engagementNames?: Record<string, string>;
+  // A small tag shown under a finding's description, such as where the
+  // indicator it matched came from.
+  extra?: (f: FindingRecord) => ReactNode;
 }) {
   const navigate = useNavigate();
   return (
@@ -60,6 +65,7 @@ export function FindingsTable({
                     {f.finding.description}
                   </Text>
                 )}
+                {extra?.(f)}
               </Table.Td>
               {engagementNames && <Table.Td data-label="Engagement">{engagementNames[f.engagementId] ?? ""}</Table.Td>}
               <Table.Td data-label="Status" style={{ whiteSpace: "nowrap" }}>

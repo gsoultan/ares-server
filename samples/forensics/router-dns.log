@@ -1,0 +1,5 @@
+Nov 14 21:03:58 dnsmasq[811]: query[A] www.wikipedia.org from 192.168.1.23
+Nov 14 21:04:00 dnsmasq[811]: query[A] cdn.spyware-delivery.example from 192.168.1.23
+Nov 14 21:04:00 dnsmasq[811]: reply cdn.spyware-delivery.example is 203.0.113.77
+Nov 14 21:06:12 dnsmasq[811]: query[A] xn--pple-43d.example from 192.168.1.40
+Nov 14 21:07:40 dnsmasq[811]: query[AAAA] old-tracker.example from 192.168.1.23

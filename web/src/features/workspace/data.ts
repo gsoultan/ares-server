@@ -165,7 +165,9 @@ export interface FindingRecord {
   rechecked: boolean;
 }
 
-export function useFindings(engagementId?: string): {
+// keepWithdrawn keeps a match to a withdrawn indicator: a note, not a
+// weakness, which the Forensics page lists for the record.
+export function useFindings(engagementId?: string, keepWithdrawn = false): {
   findings: FindingRecord[];
   loading: boolean;
   fetching: boolean;
@@ -191,13 +193,13 @@ export function useFindings(engagementId?: string): {
           rechecked: !f.stillPresent,
         }))
         // A note is not a weakness; it stays with its test's results.
-        .filter((f) => f.finding.severity !== "info")
+        .filter((f) => f.finding.severity !== "info" || (keepWithdrawn && f.finding.raw["withdrawn"] === true))
         .sort(
           (a, b) =>
             severityRank(a.finding.severity) - severityRank(b.finding.severity) ||
             b.foundAt.localeCompare(a.foundAt),
         ),
-    [list.data],
+    [list.data, keepWithdrawn],
   );
   return { findings, loading: list.isLoading, fetching: list.isFetching };
 }
