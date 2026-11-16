@@ -29,6 +29,7 @@ import { AddAgent } from "../features/agents/AddAgent.tsx";
 import { AgentDetail } from "../features/agents/AgentDetail.tsx";
 import { AgentsSection } from "../features/agents/AgentsSection.tsx";
 import { useAgentActivity } from "../features/agents/data.ts";
+import { useFoundBy } from "../features/findings/foundBy.ts";
 
 const route = getRouteApi("/engagements/$id");
 
@@ -54,6 +55,7 @@ export function EngagementDetailPage() {
   const { findings, loading: findingsLoading } = useFindings(id);
   const { profiles } = useProfile(id);
   const agentLog = useAgentActivity(activity.entries);
+  const foundBy = useFoundBy([id]);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["engagement", tenantId, id] });
@@ -215,7 +217,7 @@ export function EngagementDetailPage() {
               description="Weaknesses the tests find in this engagement are listed here."
             />
           ) : (
-            <FindingsTable findings={findings} />
+            <FindingsTable findings={findings} foundBy={foundBy} />
           )}
         </Section>
       )}
