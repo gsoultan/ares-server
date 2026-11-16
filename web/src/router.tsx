@@ -15,6 +15,8 @@ export interface EngagementSearch {
   finding?: string;
   // The test to preselect, inside the run-tests section.
   test?: string;
+  // The agent to open, inside the agents section; "new" adds one.
+  agent?: string;
 }
 
 // Workspace pages can be narrowed to one engagement.
@@ -50,6 +52,7 @@ const engagementRoute = createRoute({
     view: ENGAGEMENT_VIEWS.find((v) => v === search["view"]),
     finding: text(search["finding"]),
     test: text(search["test"]),
+    agent: text(search["agent"]),
   }),
   component: lazyRouteComponent(
     () => import("./routes/engagement-detail.tsx"),

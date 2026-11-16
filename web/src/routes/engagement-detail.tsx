@@ -25,6 +25,10 @@ import { useActivity } from "../features/engagement/useActivity.ts";
 import { FindingDetail } from "../features/findings/FindingDetail.tsx";
 import { FindingsTable } from "../features/findings/FindingsTable.tsx";
 import { useFindings } from "../features/workspace/data.ts";
+import { AddAgent } from "../features/agents/AddAgent.tsx";
+import { AgentDetail } from "../features/agents/AgentDetail.tsx";
+import { AgentsSection } from "../features/agents/AgentsSection.tsx";
+import { useAgentActivity } from "../features/agents/data.ts";
 
 const route = getRouteApi("/engagements/$id");
 
@@ -49,6 +53,7 @@ export function EngagementDetailPage() {
   const activity = useActivity(id);
   const { findings, loading: findingsLoading } = useFindings(id);
   const { profiles } = useProfile(id);
+  const agentLog = useAgentActivity(activity.entries);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["engagement", tenantId, id] });
@@ -80,6 +85,23 @@ export function EngagementDetailPage() {
     : undefined;
   if (opened) {
     return <FindingDetail record={opened} engagementName={eng.name} canTest={canTest} />;
+  }
+
+  // One agent, or adding one, also takes the whole page.
+  const agentFindings = findings.filter((f) => agentLog.taskAgent.has(f.jobId));
+  if (view === "agents" && search.agent === "new" && canTest) {
+    return <AddAgent engagement={eng} />;
+  }
+  if (view === "agents" && search.agent && search.agent !== "new") {
+    return (
+      <AgentDetail
+        engagement={eng}
+        agentId={search.agent}
+        findings={agentFindings.filter((f) => agentLog.taskAgent.get(f.jobId) === search.agent)}
+        activity={agentLog.byAgent.get(search.agent) ?? []}
+        canTest={canTest}
+      />
+    );
   }
 
   // The saved scope, in the server's own words, from the latest log entry.
@@ -158,6 +180,8 @@ export function EngagementDetailPage() {
           {(canTest || profiles.length > 0) && <TargetProfile id={id} canTest={canTest} />}
         </>
       )}
+
+      {view === "agents" && <AgentsSection id={id} canTest={canTest} agentFindings={agentFindings} />}
 
       {view === "testing" &&
         (canTest ? (

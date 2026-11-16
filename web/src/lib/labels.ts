@@ -283,6 +283,13 @@ const ACTIONS: Record<string, string> = {
   "finding-status": "Finding status changed",
   "evidence-ingested": "Evidence recorded",
   result: "Result recorded",
+  "agent.key.mint": "Agent install key made",
+  "agent.key.cancel": "Agent install key cancelled",
+  "agent.enroll": "Agent installed and connected",
+  "agent.dispatch": "Check sent to an agent",
+  "agent.results": "Agent sent results",
+  "agent.remove": "Agent removed",
+  "agent.deregister": "Agent uninstalled itself",
 };
 
 export function actionLabel(action: string): string {
@@ -297,7 +304,11 @@ const ACTORS: Record<string, string> = {
   operator: "You",
 };
 
+// Agents act under their own id; the log calls them what they are.
+const AGENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function actorLabel(actor: string): string {
+  if (AGENT_ID.test(actor)) return "Agent";
   return ACTORS[actor] ?? actor;
 }
 

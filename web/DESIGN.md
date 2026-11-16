@@ -70,6 +70,7 @@ The menu on the left is the map of the product.
 | Engagements | The rounds of testing, with status, open findings and last test |
 | Engagement: Scope and permission | What may be tested and who allowed it |
 | Engagement: Target profile | What the target is built with, and which tests that makes worth running |
+| Engagement: Agents | The testing agents installed inside the client's network with the owner's permission: add one, see what it may do and what it did, remove it |
 | Engagement: Run tests | Start a test, see earlier tests, read results |
 | Engagement: Findings | The weaknesses found; one opens with fix steps, proof, status and re-check |
 | Engagement: Risk picture | How findings combine into routes an attacker could take |
