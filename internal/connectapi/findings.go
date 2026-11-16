@@ -17,7 +17,9 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares-server/internal/worker"
 )
@@ -26,12 +28,13 @@ import (
 // in-memory, matching the in-memory outcome store: findings are derived from job
 // outcomes and do not survive a restart, so their status need not either.
 type findingStatusStore struct {
-	mu sync.Mutex
-	m  map[string]string
+	mu       sync.Mutex
+	m        map[string]string
+	versions map[string]uint64 // engagement -> bumps on every status change
 }
 
 func newFindingStatusStore() *findingStatusStore {
-	return &findingStatusStore{m: make(map[string]string)}
+	return &findingStatusStore{m: make(map[string]string), versions: make(map[string]uint64)}
 }
 
 func (s *findingStatusStore) get(id string) string {
@@ -43,10 +46,36 @@ func (s *findingStatusStore) get(id string) string {
 	return "open"
 }
 
-func (s *findingStatusStore) set(id, status string) {
+// set records a finding's status; engagementID is the finding's engagement, so
+// cached findings views of that engagement are invalidated.
+func (s *findingStatusStore) set(engagementID, id, status string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m[id] = status
+	s.versions[engagementID]++
+}
+
+// version changes whenever a status of one of the engagement's findings does.
+func (s *findingStatusStore) version(engagementID string) uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.versions[engagementID]
+}
+
+// restoreFindingStatuses rebuilds the triage state from the audit trails, where
+// every status change is recorded ("finding-status", target = finding id,
+// detail = status). Job outcomes now survive a restart, so their findings'
+// statuses must too; the audit trail already holds them, in order.
+func (h *Handler) restoreFindingStatuses() {
+	for _, t := range h.store.ListTenants() {
+		for _, eng := range h.store.List(t.ID) {
+			for _, e := range eng.Audit.Entries() {
+				if e.Action == "finding-status" && validFindingStatus(e.Detail) {
+					h.statuses.set(eng.ID, e.Target, e.Detail)
+				}
+			}
+		}
+	}
 }
 
 func validFindingStatus(s string) bool {
@@ -173,7 +202,8 @@ func (h *Handler) ListFindings(_ context.Context, req *connect.Request[aresv1.Li
 	if err != nil {
 		return nil, err
 	}
-	return connect.NewResponse(&aresv1.ListFindingsResponse{Findings: h.collectFindings(engIDs, engName)}), nil
+	key := engagement.ResolveTenant(req.Msg.GetTenantId()) + "|" + req.Msg.GetEngagementId()
+	return connect.NewResponse(&aresv1.ListFindingsResponse{Findings: h.cachedFindings(key, engIDs, engName)}), nil
 }
 
 // SetFindingStatus records the operator's triage state for a finding and audits
@@ -191,16 +221,18 @@ func (h *Handler) SetFindingStatus(_ context.Context, req *connect.Request[aresv
 		return nil, err
 	}
 	var found *aresv1.Finding
-	for _, f := range h.collectFindings(engIDs, engName) {
+	key := engagement.ResolveTenant(req.Msg.GetTenantId()) + "|"
+	for _, f := range h.cachedFindings(key, engIDs, engName) {
 		if f.GetId() == req.Msg.GetId() {
-			found = f
+			// The cached list is shared with concurrent readers: never mutate it.
+			found = proto.Clone(f).(*aresv1.Finding)
 			break
 		}
 	}
 	if found == nil {
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("finding not found"))
 	}
-	h.statuses.set(found.GetId(), status)
+	h.statuses.set(found.GetEngagementId(), found.GetId(), status)
 	found.Status = status
 
 	actor := req.Msg.GetActor()
@@ -232,7 +264,25 @@ func (h *Handler) workspaceEngagements(tenantID, id string) ([]string, map[strin
 		ids = append(ids, e.ID)
 		engName[e.ID] = e.Name
 	}
+	// A stable order keeps the aggregate deterministic and its cache fingerprint
+	// independent of map iteration order.
+	sort.Strings(ids)
 	return ids, engName, nil
+}
+
+// cachedFindings is collectFindings behind the read-path memo. The result is a
+// pure function of the engagements' outcomes and finding statuses, both
+// versioned, so it is rebuilt only after one of them changes, not on every page
+// load. key scopes the entry to the caller's workspace and query. The returned
+// slice and its findings are shared: callers must not mutate them.
+func (h *Handler) cachedFindings(key string, engIDs []string, engName map[string]string) []*aresv1.Finding {
+	fp := newFingerprint()
+	for _, id := range engIDs {
+		fp.str(id).str(engName[id]).num(h.outcomes.Version(id)).num(h.statuses.version(id))
+	}
+	return h.memo.get("findings|"+key, fp.sum(), func() any {
+		return h.collectFindings(engIDs, engName)
+	}).([]*aresv1.Finding)
 }
 
 // findingKey is a finding's stable identity across runs: the engagement, the

@@ -336,14 +336,18 @@ func (s *Server) dispatchJob(w http.ResponseWriter, r *http.Request) {
 		body.Actor = "operator"
 	}
 	jobID := uuid.NewV7()
-	s.queue.Enqueue(queue.Job{
+	if err := s.queue.TryEnqueue(queue.Job{
 		ID:           jobID,
 		EngagementID: eng.ID,
 		Module:       body.Module,
 		Actor:        body.Actor,
 		Targets:      body.Targets,
 		Params:       body.Params,
-	})
+	}); err != nil {
+		w.Header().Set("Retry-After", "5")
+		http.Error(w, "job queue is full, try again shortly", http.StatusServiceUnavailable)
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"jobId":  jobID,
 		"status": "queued",

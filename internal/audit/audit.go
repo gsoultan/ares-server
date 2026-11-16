@@ -97,6 +97,28 @@ func (l *Log) Entries() []Entry {
 
 // Verify walks the chain and confirms each entry's hash and its link to the
 // previous one. It returns an error naming the first broken sequence number.
+// Len returns the number of entries. The log is append-only, so a length is
+// enough to tell whether anything derived from Entries is still current.
+func (l *Log) Len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.entries)
+}
+
+// Since returns a copy of the entries from index n on, and the log's length.
+// A persistent store uses it to append only what it has not written yet,
+// without copying the whole trail on every save.
+func (l *Log) Since(n int) ([]Entry, int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if n < 0 || n > len(l.entries) {
+		n = len(l.entries)
+	}
+	out := make([]Entry, len(l.entries)-n)
+	copy(out, l.entries[n:])
+	return out, len(l.entries)
+}
+
 func (l *Log) Verify() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

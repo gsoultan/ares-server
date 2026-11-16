@@ -8,11 +8,16 @@
 package stormstore
 
 import (
+	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/asdine/storm/v3"
+	bolt "go.etcd.io/bbolt"
+
+	"github.com/gsoultan/ares-server/internal/audit"
 
 	"github.com/gsoultan/ares-server/internal/engagement"
 	"github.com/gsoultan/ares-server/internal/tenant"
@@ -215,16 +220,23 @@ func TestTamperAtRestDetected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("raw open: %v", err)
 	}
-	var rec record
-	if err := db.One("ID", id, &rec); err != nil {
-		t.Fatalf("raw read: %v", err)
-	}
-	if len(rec.Audit) < 2 {
-		t.Fatalf("expected at least 2 audit entries, got %d", len(rec.Audit))
-	}
-	rec.Audit[1].Detail = "tampered"
-	if err := db.Save(&rec); err != nil {
-		t.Fatalf("raw save: %v", err)
+	// Each audit entry is its own key, by engagement and seq.
+	if err := db.Bolt.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(auditBucket)
+		k := auditKey(id, 1)
+		v := b.Get(k)
+		if v == nil {
+			return fmt.Errorf("audit entry 1 not stored")
+		}
+		var e audit.Entry
+		if err := json.Unmarshal(v, &e); err != nil {
+			return err
+		}
+		e.Detail = "tampered"
+		nv, _ := json.Marshal(e)
+		return b.Put(k, nv)
+	}); err != nil {
+		t.Fatalf("tamper: %v", err)
 	}
 	db.Close()
 
