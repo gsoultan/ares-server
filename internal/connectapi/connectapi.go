@@ -338,7 +338,9 @@ func (h *Handler) GetJob(_ context.Context, req *connect.Request[aresv1.GetJobRe
 	if eng, found := h.store.Get(o.Engagement); !found || eng.TenantID != engagement.ResolveTenant(req.Msg.GetTenantId()) {
 		return pending, nil
 	}
-	return connect.NewResponse(outcomeProto(o)), nil
+	jo := outcomeProto(o)
+	jo.Progress = progressProto(o, h.outcomes, time.Now())
+	return connect.NewResponse(jo), nil
 }
 
 // GetAudit returns the hash-chained audit trail and whether it verifies.

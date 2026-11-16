@@ -19,6 +19,7 @@ import (
 
 	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
+	"github.com/gsoultan/ares-server/internal/eta"
 	"github.com/gsoultan/ares-server/internal/queue"
 	"github.com/gsoultan/ares-server/internal/report"
 	"github.com/gsoultan/ares-server/internal/uuid"
@@ -566,7 +567,16 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 		return
 	}
-	writeJSON(w, http.StatusOK, o)
+	// The outcome, plus how long it has left when the store can estimate it.
+	resp := struct {
+		worker.Outcome
+		TimeLeft *eta.Estimate `json:"timeLeft,omitempty"`
+	}{Outcome: o}
+	if est, can := s.outcomes.(worker.Estimator); can {
+		e := est.Estimate(o, time.Now())
+		resp.TimeLeft = &e
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) getAudit(w http.ResponseWriter, r *http.Request) {

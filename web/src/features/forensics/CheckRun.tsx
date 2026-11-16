@@ -14,6 +14,7 @@ import { control } from "../../client.ts";
 import type { JobOutcome, Result } from "../../gen/ares/v1/ares_pb.ts";
 import { severityRank, toFinding } from "../../lib/findings.ts";
 import { dismissForensicRun, type ForensicRun } from "../../lib/local.ts";
+import { timeLeft } from "../../lib/timeLeft.ts";
 import { useTenant } from "../../tenant.tsx";
 import { SeverityBadge } from "../../ui/index.tsx";
 import { ProvenanceTag } from "./Provenance.tsx";
@@ -134,6 +135,18 @@ export function CheckRun({ run }: { run: ForensicRun }) {
   }, [canStep, step]);
 
   const finished = shown.every((s) => s === "done" || s === "failed");
+  // How long is left, by the running check that will finish last. While any
+  // running check has no estimate yet, say so rather than guess.
+  const running = outcomes.map((o) => o?.data).filter((d) => d && d.status === "running");
+  const left =
+    finished || running.length === 0
+      ? undefined
+      : running.some((d) => d!.progress?.state !== "estimate")
+        ? timeLeft(running.find((d) => d!.progress?.state !== "estimate")!.progress)
+        : timeLeft(
+            running.reduce((a, b) => (b!.progress!.remainingHighSeconds > a!.progress!.remainingHighSeconds ? b : a))!
+              .progress,
+          );
   const progress =
     run.jobs.length === 0
       ? 100
@@ -170,6 +183,12 @@ export function CheckRun({ run }: { run: ForensicRun }) {
             <Text size="sm" c="dimmed" style={{ wordBreak: "break-word" }}>
               {run.title} · read-only · nothing it came from is contacted
             </Text>
+            {left && (
+              <Text size="xs" c="dimmed" mt={2}>
+                {left.short}
+                {left.by && ` · done around ${left.by}`}
+              </Text>
+            )}
           </Box>
           <Text fw={650} fz={22} style={{ fontVariantNumeric: "tabular-nums" }} aria-label={`${progress}% done`}>
             {progress}%

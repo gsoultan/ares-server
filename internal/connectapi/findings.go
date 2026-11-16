@@ -115,10 +115,15 @@ func (h *Handler) ListJobs(_ context.Context, req *connect.Request[aresv1.ListJo
 	}
 	resp := &aresv1.ListJobsResponse{}
 	completed := map[string]bool{}
+	now := time.Now()
 	for _, o := range h.outcomes.ByEngagement(eng.ID) { // already newest first
 		completed[o.JobID] = true
 		status := "done"
-		if o.Error != "" {
+		switch {
+		case o.Running():
+			// An in-flight snapshot: the job has started but not finished.
+			status = "running"
+		case o.Error != "":
 			status = "error"
 		}
 		findings := 0
@@ -137,6 +142,7 @@ func (h *Handler) ListJobs(_ context.Context, req *connect.Request[aresv1.ListJo
 			Denied:     int32(len(o.Denied)),
 			Findings:   int32(findings),
 			Error:      o.Error,
+			Progress:   progressProto(o, h.outcomes, now),
 		})
 	}
 	// Add still-running jobs (dispatched, no outcome yet), and prune any pending
