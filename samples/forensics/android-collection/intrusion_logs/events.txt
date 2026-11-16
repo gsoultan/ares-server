@@ -1,0 +1,3 @@
+{"type":"DnsEvent","hostname":"cdn.spyware-delivery.example","timestamp":"2026-11-14T21:04:00Z"}
+{"type":"ConnectEvent","ipAddress":"203.0.113.77","timestamp":"2026-11-14T21:04:02Z"}
+{"type":"DnsEvent","hostname":"www.wikipedia.org","timestamp":"2026-11-14T21:05:10Z"}

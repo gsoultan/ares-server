@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/gsoultan/ares-server/internal/auth"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares-server/internal/setup"
 )
@@ -21,7 +22,7 @@ import (
 // GetSetupStatus reports whether first-run setup is still required, and which
 // datastore drivers the server can commit to. It is always available so the app
 // can decide at startup whether to show the wizard.
-func (h *Handler) GetSetupStatus(_ context.Context, _ *connect.Request[aresv1.GetSetupStatusRequest]) (*connect.Response[aresv1.SetupStatus], error) {
+func (h *Handler) GetSetupStatus(ctx context.Context, _ *connect.Request[aresv1.GetSetupStatusRequest]) (*connect.Response[aresv1.SetupStatus], error) {
 	if h.setup == nil {
 		// No setup service wired (e.g. ephemeral/in-memory run): report done so the
 		// app is not stuck on a wizard it cannot complete.
@@ -35,8 +36,15 @@ func (h *Handler) GetSetupStatus(_ context.Context, _ *connect.Request[aresv1.Ge
 		Needed:      st.Needed,
 		Initialized: st.Initialized,
 		Drivers:     driverProtos(st.Drivers),
-		DbPath:      st.DBPath,
+		DbPath:      st.DBPath, // password already redacted by the service
 		KeyFilePath: st.KeyFilePath,
+	}
+	// This RPC is public. Once the install is set up, where its database and key
+	// live is nobody's business but a super-admin's.
+	if !st.Needed {
+		if sess, ok := SessionFromContext(ctx); !ok || sess.Role != auth.RoleSuperAdmin {
+			out.DbPath, out.KeyFilePath = "", ""
+		}
 	}
 	if !st.InitializedAt.IsZero() {
 		out.InitializedAt = st.InitializedAt.UTC().Format(time.RFC3339)

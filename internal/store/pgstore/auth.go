@@ -174,3 +174,11 @@ func (r *SessionRepo) Delete(tokenHash string) error {
 	}
 	return nil
 }
+
+// DeleteForUser implements auth.SessionStore.
+func (r *SessionRepo) DeleteForUser(userID string) error {
+	if _, err := sessionpkg.New().UserIDEq(userID).DeleteAll(context.Background(), r.ex); err != nil {
+		return fmt.Errorf("pgstore: delete sessions for user: %w", err)
+	}
+	return nil
+}

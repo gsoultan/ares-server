@@ -221,3 +221,50 @@ func TestEngagementCarriesScope(t *testing.T) {
 		t.Errorf("exclude = %v, want [10.0.0.0/8]", ex)
 	}
 }
+
+// TestJobProgressAndTimeLeft checks that a started-but-unfinished job is listed
+// as running with its step count and an honest "estimating" (no history yet),
+// and that GetJob reports the same.
+func TestJobProgressAndTimeLeft(t *testing.T) {
+	h := newTestHandler(t)
+	ctx := context.Background()
+	created, err := h.CreateEngagement(ctx, connect.NewRequest(&aresv1.CreateEngagementRequest{Name: "ETA demo"}))
+	if err != nil {
+		t.Fatalf("CreateEngagement: %v", err)
+	}
+	id := created.Msg.GetId()
+	tgt := module.Target{URL: "https://app.example/"}
+	h.outcomes.Save(worker.Outcome{
+		JobID: "jr", Engagement: id, Module: "recon",
+		Allowed:   []module.Target{tgt},
+		StartedAt: time.Now().Add(-30 * time.Second),
+		Progress:  &module.Progress{Done: 1, Total: 1, TotalMayGrow: true, Step: "recon"},
+	})
+
+	resp, err := h.ListJobs(ctx, connect.NewRequest(&aresv1.ListJobsRequest{EngagementId: id}))
+	if err != nil {
+		t.Fatalf("ListJobs: %v", err)
+	}
+	jobs := resp.Msg.GetJobs()
+	if len(jobs) != 1 || jobs[0].GetStatus() != "running" {
+		t.Fatalf("want one running job, got %+v", jobs)
+	}
+	p := jobs[0].GetProgress()
+	if p.GetState() != "estimating" || p.GetRemainingHighSeconds() != 0 {
+		t.Errorf("progress = %+v, want estimating with no number", p)
+	}
+	if p.GetDone() != 1 || !p.GetTotalMayGrow() || p.GetStep() != "recon" {
+		t.Errorf("step count not carried: %+v", p)
+	}
+	if p.GetElapsedSeconds() < 29 {
+		t.Errorf("elapsed = %d s, want about 30", p.GetElapsedSeconds())
+	}
+
+	got, err := h.GetJob(ctx, connect.NewRequest(&aresv1.GetJobRequest{JobId: "jr"}))
+	if err != nil {
+		t.Fatalf("GetJob: %v", err)
+	}
+	if got.Msg.GetStatus() != "running" || got.Msg.GetProgress().GetState() != "estimating" {
+		t.Errorf("GetJob status=%q progress=%+v", got.Msg.GetStatus(), got.Msg.GetProgress())
+	}
+}

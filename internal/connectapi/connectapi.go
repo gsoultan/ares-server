@@ -27,6 +27,7 @@ import (
 
 	"github.com/gsoultan/ares-server/internal/agent"
 	"github.com/gsoultan/ares-server/internal/ai"
+	"github.com/gsoultan/ares-server/internal/audit"
 	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
@@ -53,6 +54,7 @@ type Handler struct {
 	purple   *purple.Catalog
 	statuses *findingStatusStore
 	pending  *pendingJobs
+	memo     *memo             // read-path results, keyed by their versioned inputs
 	advisor  *ai.Advisor       // nil when no AI provider is configured (feature off)
 	settings *settings.Service // nil until a master key is available (pre-setup)
 	auth     *auth.Service     // nil disables the auth RPCs
@@ -75,7 +77,9 @@ func New(store engagement.Store, reg *module.Registry, q *queue.Queue, outcomes 
 		purple:   purple.NewCatalog(),
 		statuses: newFindingStatusStore(),
 		pending:  newPendingJobs(),
+		memo:     newMemo(4096),
 	}
+	h.restoreFindingStatuses()
 	if adv, err := ai.AdvisorFromEnv(); err == nil {
 		h.advisor = adv
 		log.Printf("ai advisor enabled: provider=%s model=%s", adv.Provider().Name(), adv.Provider().Model())
@@ -126,18 +130,29 @@ func (h *Handler) ListModules(_ context.Context, _ *connect.Request[aresv1.ListM
 	return connect.NewResponse(&aresv1.ListModulesResponse{Modules: h.reg.Names()}), nil
 }
 
-// CreateTenant creates a client workspace.
-func (h *Handler) CreateTenant(_ context.Context, req *connect.Request[aresv1.CreateTenantRequest]) (*connect.Response[aresv1.Tenant], error) {
+// CreateTenant creates a client workspace. Once accounts exist it is a
+// super-admin action.
+func (h *Handler) CreateTenant(ctx context.Context, req *connect.Request[aresv1.CreateTenantRequest]) (*connect.Response[aresv1.Tenant], error) {
 	if req.Msg.GetName() == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name is required"))
+	}
+	if sess, ok := SessionFromContext(ctx); ok && sess.Role != auth.RoleSuperAdmin {
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only a super-admin may create workspaces"))
 	}
 	t := h.store.CreateTenant(req.Msg.GetName())
 	return connect.NewResponse(tenantProto(t)), nil
 }
 
-// ListTenants lists the client workspaces.
-func (h *Handler) ListTenants(_ context.Context, _ *connect.Request[aresv1.ListTenantsRequest]) (*connect.Response[aresv1.ListTenantsResponse], error) {
+// ListTenants lists the client workspaces. A workspace-bound account sees only
+// its own, never the names of the platform's other clients.
+func (h *Handler) ListTenants(ctx context.Context, _ *connect.Request[aresv1.ListTenantsRequest]) (*connect.Response[aresv1.ListTenantsResponse], error) {
 	list := h.store.ListTenants()
+	if sess, ok := SessionFromContext(ctx); ok && sess.Role != auth.RoleSuperAdmin {
+		list = list[:0:0]
+		if t, found := h.store.GetTenant(sess.TenantID); found {
+			list = append(list, t)
+		}
+	}
 	resp := &aresv1.ListTenantsResponse{Tenants: make([]*aresv1.Tenant, 0, len(list))}
 	for _, t := range list {
 		resp.Tenants = append(resp.Tenants, tenantProto(t))
@@ -309,14 +324,16 @@ func (h *Handler) DispatchJob(_ context.Context, req *connect.Request[aresv1.Dis
 		targets = append(targets, targetDomain(t))
 	}
 	jobID := uuid.NewV7()
-	h.queue.Enqueue(queue.Job{
+	if err := h.queue.TryEnqueue(queue.Job{
 		ID:           jobID,
 		EngagementID: eng.ID,
 		Module:       req.Msg.GetModule(),
 		Actor:        actor,
 		Targets:      targets,
 		Params:       params,
-	})
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("job queue is full, try again shortly"))
+	}
 	// Record it as running so ListJobs shows an in-flight row that survives a page
 	// reload; it is pruned once the worker records the outcome.
 	h.pending.add(jobID, eng.ID, req.Msg.GetModule())
@@ -336,7 +353,21 @@ func (h *Handler) GetJob(_ context.Context, req *connect.Request[aresv1.GetJobRe
 	if eng, found := h.store.Get(o.Engagement); !found || eng.TenantID != engagement.ResolveTenant(req.Msg.GetTenantId()) {
 		return pending, nil
 	}
-	return connect.NewResponse(outcomeProto(o)), nil
+	// Results are append-only and a job's other fields only change as it
+	// progresses, so this tuple identifies the outcome's state exactly; a
+	// finished job's results are built once and then served from memory. The
+	// cached message is shared, so the response is a new message over its
+	// (read-only) slices, with the time-dependent progress added fresh.
+	fp := newFingerprint().num(uint64(len(o.Results))).num(uint64(o.FinishedAt.UnixNano())).
+		str(o.CurrentCapability).str(o.Error).num(uint64(len(o.Allowed))).num(uint64(len(o.Denied))).sum()
+	base := h.memo.get("job|"+o.JobID, fp, func() any { return outcomeProto(o) }).(*aresv1.JobOutcome)
+	jo := &aresv1.JobOutcome{
+		Status: base.Status, JobId: base.JobId, Engagement: base.Engagement, Module: base.Module,
+		Allowed: base.Allowed, Denied: base.Denied, Results: base.Results,
+		Error: base.Error, CurrentCapability: base.CurrentCapability,
+		Progress: progressProto(o, h.outcomes, time.Now()),
+	}
+	return connect.NewResponse(jo), nil
 }
 
 // GetAudit returns the hash-chained audit trail and whether it verifies.
@@ -345,8 +376,21 @@ func (h *Handler) GetAudit(_ context.Context, req *connect.Request[aresv1.GetAud
 	if err != nil {
 		return nil, err
 	}
-	resp := &aresv1.GetAuditResponse{Valid: eng.Audit.Verify() == nil}
-	for _, e := range eng.Audit.Entries() {
+	// The trail is append-only: its length identifies its state, so the proto
+	// (and the O(n) hash-chain verification) is rebuilt only after an append.
+	n := uint64(eng.Audit.Len())
+	resp := h.memo.get("audit|"+eng.ID, n, func() any { return auditProto(eng) }).(*aresv1.GetAuditResponse)
+	return connect.NewResponse(resp), nil
+}
+
+// auditProto renders an engagement's audit trail and its verification result.
+func auditProto(eng *engagement.Engagement) *aresv1.GetAuditResponse {
+	entries := eng.Audit.Entries()
+	resp := &aresv1.GetAuditResponse{
+		Valid:   audit.Load(entries).Verify() == nil,
+		Entries: make([]*aresv1.AuditEntry, 0, len(entries)),
+	}
+	for _, e := range entries {
 		resp.Entries = append(resp.Entries, &aresv1.AuditEntry{
 			Seq: int32(e.Seq),
 			// UTC RFC3339Nano is exactly the string the hash is computed over
@@ -361,7 +405,7 @@ func (h *Handler) GetAudit(_ context.Context, req *connect.Request[aresv1.GetAud
 			Hash:     e.Hash,
 		})
 	}
-	return connect.NewResponse(resp), nil
+	return resp
 }
 
 // GenerateReport renders a client-ready report (PDF, DOCX or Markdown) for an
@@ -407,8 +451,12 @@ func (h *Handler) GetRiskPicture(_ context.Context, req *connect.Request[aresv1.
 	if err != nil {
 		return nil, err
 	}
-	risk := report.RiskOf(h.outcomes.ByEngagement(eng.ID))
-	return connect.NewResponse(riskPictureProto(risk)), nil
+	// A pure function of the engagement's outcomes: rebuilt only when they change.
+	v := h.outcomes.Version(eng.ID)
+	rp := h.memo.get("risk|"+eng.ID, v, func() any {
+		return riskPictureProto(report.RiskOf(h.outcomes.ByEngagement(eng.ID)))
+	}).(*aresv1.RiskPicture)
+	return connect.NewResponse(rp), nil
 }
 
 // SetDetection records the defender's response for one technique and returns the
@@ -644,24 +692,6 @@ func outcomeProto(o worker.Outcome) *aresv1.JobOutcome {
 		jo.Results = append(jo.Results, pr)
 	}
 	return jo
-}
-
-// mapToStruct converts a module's result payload to a protobuf Struct. It
-// round-trips through JSON so arbitrary nested values (slices, maps, numbers)
-// map cleanly, rather than relying on structpb's narrower type set.
-func mapToStruct(m map[string]any) (*structpb.Struct, error) {
-	if len(m) == 0 {
-		return nil, nil
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		return nil, err
-	}
-	s := &structpb.Struct{}
-	if err := protojson.Unmarshal(b, s); err != nil {
-		return nil, err
-	}
-	return s, nil
 }
 
 // structToJSON converts job params (a protobuf Struct) back to the json.RawMessage

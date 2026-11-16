@@ -25,6 +25,7 @@ import { errorText, formatWhen, moduleInfo, plural, type Tone } from "../../lib/
 import { EmptyState, ErrorNote, LoadingState, Section, SeverityBadge, Stat, ToneBadge } from "../../ui/index.tsx";
 import { targetLabel, useFindings, useJobOutcome, useJobs, type Job } from "../workspace/data.ts";
 import { liveRun, markPlayed } from "../../lib/local.ts";
+import { timeLeft } from "../../lib/timeLeft.ts";
 import { LiveTest } from "./LiveTest.tsx";
 import { useStartTest } from "./startTest.ts";
 
@@ -247,7 +248,7 @@ export function RunTest({
 // What an earlier test came to, in a word.
 function jobSummary(job: Job): { label: string; tone: Tone } {
   const o = job.summary;
-  if (!job.done || !o) return { label: "Running", tone: "brand" };
+  if (!job.done || !o) return { label: timeLeft(job.progress)?.short ?? "Running", tone: "brand" };
   if (o.error || o.status === "error") return { label: "Did not finish", tone: "bad" };
   if (o.findings > 0) return { label: plural(o.findings, "finding"), tone: "bad" };
   if (job.module === "recon") return { label: "Profile ready", tone: "neutral" };
@@ -346,7 +347,13 @@ function TestResult({ job, engagementId }: { job: Job; engagementId: string }) {
   if (!job.done || !outcome.data) {
     return (
       <Section title={title} description={when}>
-        <LoadingState label={job.done ? "Loading the results…" : "Running the test…"} />
+        <LoadingState
+          label={
+            job.done
+              ? "Loading the results…"
+              : timeLeft(job.progress) ? `Running the test. ${timeLeft(job.progress)!.short}` : "Running the test…"
+          }
+        />
       </Section>
     );
   }

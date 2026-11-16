@@ -15,6 +15,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -67,7 +69,7 @@ func derive(password string) (string, error) {
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("auth: salt: %w", err)
 	}
-	dk, err := pbkdf2.Key(sha256.New, password, salt, pbkdf2Iter, pbkdf2KeyLen)
+	dk, err := kdf(password, salt, pbkdf2Iter, pbkdf2KeyLen)
 	if err != nil {
 		return "", fmt.Errorf("auth: derive: %w", err)
 	}
@@ -94,9 +96,32 @@ func VerifyPassword(encoded, password string) (bool, error) {
 	if err != nil {
 		return false, ErrBadHash
 	}
-	got, err := pbkdf2.Key(sha256.New, password, salt, iter, len(want))
+	got, err := kdf(password, salt, iter, len(want))
 	if err != nil {
 		return false, fmt.Errorf("auth: derive: %w", err)
 	}
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
+}
+
+// kdfSlots caps how many password derivations run at once. One derivation is
+// ~90 ms of CPU (600k PBKDF2-SHA256 rounds, deliberately), so a burst of
+// sign-ins can occupy every core. ARES_KDF_CONCURRENCY=n lets sign-ins queue
+// for n slots and keeps the other cores for requests. The default is one slot
+// per usable CPU (no extra limit): on a 2-core load test, halving it doubled
+// the time to sign 1,000 users in and did not improve request latency during
+// a sign-in burst, so it is opt-in for larger hosts.
+var kdfSlots = make(chan struct{}, kdfConcurrency(os.Getenv("ARES_KDF_CONCURRENCY"), runtime.GOMAXPROCS(0)))
+
+func kdfConcurrency(env string, procs int) int {
+	if n, err := strconv.Atoi(strings.TrimSpace(env)); err == nil && n > 0 {
+		return n
+	}
+	return max(procs, 1)
+}
+
+// kdf is pbkdf2.Key behind the concurrency cap.
+func kdf(password string, salt []byte, iter, keyLen int) ([]byte, error) {
+	kdfSlots <- struct{}{}
+	defer func() { <-kdfSlots }()
+	return pbkdf2.Key(sha256.New, password, salt, iter, keyLen)
 }

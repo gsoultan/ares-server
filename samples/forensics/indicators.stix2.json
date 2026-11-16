@@ -1,0 +1,15 @@
+{
+  "type": "bundle",
+  "id": "bundle--6f1a0c3e-0000-4000-8000-000000000001",
+  "objects": [
+    {"type":"malware","spec_version":"2.1","id":"malware--6f1a0c3e-0000-4000-8000-000000000010","name":"ExampleSpy (synthetic)","is_family":true},
+    {"type":"indicator","spec_version":"2.1","id":"indicator--6f1a0c3e-0000-4000-8000-000000000101","pattern":"[app:id = 'com.example.spyagent']","pattern_type":"stix","valid_from":"2026-01-01T00:00:00Z","confidence":90,"indicator_types":["malicious-activity"]},
+    {"type":"indicator","spec_version":"2.1","id":"indicator--6f1a0c3e-0000-4000-8000-000000000102","pattern":"[file:hashes.'SHA-256' = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc']","pattern_type":"stix","valid_from":"2026-01-01T00:00:00Z","confidence":90,"indicator_types":["malicious-activity"]},
+    {"type":"indicator","spec_version":"2.1","id":"indicator--6f1a0c3e-0000-4000-8000-000000000103","pattern":"[domain-name:value = 'spyware-delivery.example']","pattern_type":"stix","valid_from":"2026-01-01T00:00:00Z","confidence":85,"indicator_types":["malicious-activity"]},
+    {"type":"indicator","spec_version":"2.1","id":"indicator--6f1a0c3e-0000-4000-8000-000000000104","pattern":"[ipv4-addr:value = '203.0.113.77']","pattern_type":"stix","valid_from":"2026-01-01T00:00:00Z","confidence":60,"indicator_types":["malicious-activity"]},
+    {"type":"indicator","spec_version":"2.1","id":"indicator--6f1a0c3e-0000-4000-8000-000000000105","pattern":"[domain-name:value = 'old-tracker.example']","pattern_type":"stix","valid_from":"2026-01-01T00:00:00Z","revoked":true,"indicator_types":["malicious-activity"]},
+    {"type":"relationship","spec_version":"2.1","id":"relationship--6f1a0c3e-0000-4000-8000-000000000201","relationship_type":"indicates","source_ref":"indicator--6f1a0c3e-0000-4000-8000-000000000101","target_ref":"malware--6f1a0c3e-0000-4000-8000-000000000010"},
+    {"type":"relationship","spec_version":"2.1","id":"relationship--6f1a0c3e-0000-4000-8000-000000000202","relationship_type":"indicates","source_ref":"indicator--6f1a0c3e-0000-4000-8000-000000000102","target_ref":"malware--6f1a0c3e-0000-4000-8000-000000000010"},
+    {"type":"relationship","spec_version":"2.1","id":"relationship--6f1a0c3e-0000-4000-8000-000000000203","relationship_type":"indicates","source_ref":"indicator--6f1a0c3e-0000-4000-8000-000000000103","target_ref":"malware--6f1a0c3e-0000-4000-8000-000000000010"}
+  ]
+}

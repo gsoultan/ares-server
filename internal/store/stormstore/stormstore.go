@@ -18,11 +18,15 @@
 package stormstore
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/asdine/storm/v3"
+	bolt "go.etcd.io/bbolt"
 
 	"github.com/gsoultan/ares-server/internal/audit"
 	"github.com/gsoultan/ares-server/internal/engagement"
@@ -32,9 +36,11 @@ import (
 	"github.com/gsoultan/ares/scope"
 )
 
-// record is the on-disk shape of an engagement. The scope and audit log are
-// stored through their serializable snapshots, not their live objects, so
-// their invariants are rebuilt on load rather than smuggled across the boundary.
+// record is the on-disk shape of an engagement's header. The scope is stored
+// through its serializable snapshot, not the live object, so its invariants are
+// rebuilt on load rather than smuggled across the boundary. The audit trail
+// lives in its own bucket (auditBucket), one key per entry; Audit here is
+// only read, from databases written before that, and is migrated out on open.
 type record struct {
 	ID            string `storm:"id"`
 	TenantID      string `storm:"index"`
@@ -45,6 +51,30 @@ type record struct {
 	Scope         scope.Snapshot
 	Audit         []audit.Entry
 	Detection     map[string]detection.Record
+}
+
+// auditBucket holds the audit trails, append-only, one bbolt key per entry:
+// engagement id, a zero byte, then the big-endian seq, so keys sort by
+// engagement and then seq and a trail is one contiguous range. The value is the
+// entry as JSON (timestamps keep their nanoseconds, so the chain verifies).
+// It is a plain bbolt bucket rather than a Storm type: Storm keeps an extra
+// index key per record and splits pages half full, which more than doubled the
+// footprint of a trail of small entries.
+var auditBucket = []byte("audit")
+
+func auditKey(engagementID string, seq int) []byte {
+	k := make([]byte, len(engagementID)+1+8)
+	n := copy(k, engagementID)
+	binary.BigEndian.PutUint64(k[n+1:], uint64(seq))
+	return k
+}
+
+// savedState is what Save last wrote for one engagement (see Save). Its mutex
+// serializes Saves of the same engagement.
+type savedState struct {
+	mu         sync.Mutex
+	auditN     int
+	headerHash [32]byte
 }
 
 // tenantRecord is the on-disk shape of a client workspace. Storm keeps each
@@ -61,6 +91,7 @@ type Store struct {
 	mu      sync.Mutex
 	m       map[string]*engagement.Engagement
 	tenants map[string]*tenant.Tenant
+	saved   map[string]*savedState
 }
 
 // compile-time check that Store satisfies the interface.
@@ -79,6 +110,7 @@ func Open(path string) (*Store, error) {
 		db:      db,
 		m:       make(map[string]*engagement.Engagement),
 		tenants: make(map[string]*tenant.Tenant),
+		saved:   make(map[string]*savedState),
 	}
 	if err := s.load(); err != nil {
 		_ = db.Close()
@@ -106,16 +138,44 @@ func (s *Store) load() error {
 		s.tenants[t.ID] = &tenant.Tenant{ID: t.ID, Name: t.Name, CreatedAt: t.CreatedAt}
 	}
 
+	trails := map[string][]audit.Entry{}
+	err := s.db.Bolt.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(auditBucket)
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(k, v []byte) error { // key order: engagement, then seq
+			if len(k) < 9 {
+				return fmt.Errorf("stormstore: malformed audit key %q", k)
+			}
+			id := string(k[:len(k)-9])
+			var e audit.Entry
+			if err := json.Unmarshal(v, &e); err != nil {
+				return fmt.Errorf("stormstore: decode audit entry of %s: %w", id, err)
+			}
+			trails[id] = append(trails[id], e)
+			return nil
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("stormstore: load audit trail: %w", err)
+	}
+
 	var recs []record
 	if err := s.db.All(&recs); err != nil && err != storm.ErrNotFound {
 		return fmt.Errorf("stormstore: load: %w", err)
 	}
 	for _, r := range recs {
+		trail := trails[r.ID]
+		legacy := len(r.Audit) > 0
+		if legacy && len(trail) == 0 {
+			trail = r.Audit
+		}
 		sc, err := scope.Restore(r.Scope)
 		if err != nil {
 			return fmt.Errorf("stormstore: restore scope for %s: %w", r.ID, err)
 		}
-		log := audit.Load(r.Audit)
+		log := audit.Load(trail)
 		if err := log.Verify(); err != nil {
 			return fmt.Errorf("stormstore: audit trail for %s failed verification at rest: %w", r.ID, err)
 		}
@@ -127,6 +187,20 @@ func (s *Store) load() error {
 		}
 		eng := engagement.Restore(r.ID, tenantID, r.Name, engagement.Status(r.Status), r.Authorization, r.CreatedAt, sc, log, r.Detection)
 		s.m[r.ID] = eng
+		st := &savedState{auditN: len(trail)}
+		s.saved[r.ID] = st
+		if legacy {
+			// Move the inline trail to its own records and drop it from the
+			// header, in one transaction: a Save from zero persisted entries.
+			st.auditN = 0
+			if err := s.Save(eng); err != nil {
+				return fmt.Errorf("stormstore: migrate audit trail of %s: %w", r.ID, err)
+			}
+			continue
+		}
+		if raw, err := json.Marshal(headerRecord(eng)); err == nil {
+			st.headerHash = sha256.Sum256(raw)
+		}
 	}
 	return nil
 }
@@ -235,12 +309,78 @@ func (s *Store) List(tenantID string) []*engagement.Engagement {
 // Save flushes the current state of an engagement to disk. Callers invoke it
 // after mutating an engagement (scope edits, authorization, the kill switch,
 // audit appends).
+//
+// The audit trail is append-only, so Save writes only the entries added since
+// the last Save, and rewrites the header record only when it changed, all in
+// one bbolt transaction. A Save costs what changed, not the length of the
+// trail, and the file no longer grows by a full copy of the trail per change.
 func (s *Store) Save(e *engagement.Engagement) error {
 	s.mu.Lock()
 	s.m[e.ID] = e
+	st, ok := s.saved[e.ID]
+	if !ok {
+		st = &savedState{}
+		s.saved[e.ID] = st
+	}
 	s.mu.Unlock()
 
-	rec := record{
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	rec := headerRecord(e)
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		return fmt.Errorf("stormstore: encode %s: %w", e.ID, err)
+	}
+	hash := sha256.Sum256(raw)
+	fresh, total := e.Audit.Since(st.auditN)
+	if total < st.auditN {
+		return fmt.Errorf("stormstore: save %s: audit trail shrank from %d to %d entries", e.ID, st.auditN, total)
+	}
+	if hash == st.headerHash && len(fresh) == 0 {
+		return nil
+	}
+
+	// The header (a Storm record) and the new entries (raw bbolt keys) commit
+	// in one transaction.
+	err = s.db.Bolt.Update(func(tx *bolt.Tx) error {
+		if hash != st.headerHash {
+			if err := s.db.WithTransaction(tx).Save(&rec); err != nil {
+				return err
+			}
+		}
+		if len(fresh) == 0 {
+			return nil
+		}
+		b, err := tx.CreateBucketIfNotExists(auditBucket)
+		if err != nil {
+			return err
+		}
+		// Entries are appended in key order within an engagement: fill pages
+		// completely instead of splitting them in half.
+		b.FillPercent = 0.95
+		for _, en := range fresh {
+			v, err := json.Marshal(en)
+			if err != nil {
+				return err
+			}
+			if err := b.Put(auditKey(e.ID, en.Seq), v); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("stormstore: save %s: %w", e.ID, err)
+	}
+	st.auditN = total
+	st.headerHash = hash
+	return nil
+}
+
+// headerRecord is an engagement's record without its audit trail.
+func headerRecord(e *engagement.Engagement) record {
+	return record{
 		ID:            e.ID,
 		TenantID:      e.TenantID,
 		Name:          e.Name,
@@ -248,13 +388,8 @@ func (s *Store) Save(e *engagement.Engagement) error {
 		Authorization: e.Authorization,
 		CreatedAt:     e.CreatedAt,
 		Scope:         e.Scope.Snapshot(),
-		Audit:         e.Audit.Entries(),
 		Detection:     e.Detection,
 	}
-	if err := s.db.Save(&rec); err != nil {
-		return fmt.Errorf("stormstore: save %s: %w", e.ID, err)
-	}
-	return nil
 }
 
 // Close closes the underlying database.

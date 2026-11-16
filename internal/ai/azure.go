@@ -56,7 +56,7 @@ func newAzure(cfg Config) (Provider, error) {
 		apiVersion: ver,
 		maxTokens:  cfg.MaxTokens,
 		temp:       cfg.Temperature,
-		client:     newHTTPClient(cfg.Timeout),
+		client:     newHTTPClient(cfg.Timeout, cfg.RestrictPrivate),
 	}, nil
 }
 

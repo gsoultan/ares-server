@@ -16,6 +16,7 @@ import type { JobOutcome } from "../../gen/ares/v1/ares_pb.ts";
 import { severityRank, toFinding, type Finding } from "../../lib/findings.ts";
 import { toProfile } from "../../lib/intel.ts";
 import { moduleInfo, plural, type Tone } from "../../lib/labels.ts";
+import { timeLeft } from "../../lib/timeLeft.ts";
 import { useTenant } from "../../tenant.tsx";
 import { Section, SeverityBadge, ToneBadge } from "../../ui/index.tsx";
 import { targetLabel } from "../workspace/data.ts";
@@ -215,6 +216,8 @@ export function LiveTest({
   const partial = progress.data && progress.data.status !== "pending" ? progress.data : undefined;
   const seenSoFar = outcome ?? partial;
   const final = !!outcome;
+  // How long is left, as the server estimates it. Only while running.
+  const left = final ? undefined : timeLeft(partial?.progress);
 
   const events = useMemo(
     () => (seenSoFar ? script(seenSoFar, module, noun, final) : []),
@@ -347,7 +350,7 @@ export function LiveTest({
   }
 
   const flowing = !finished && stage >= 1 && !untouched && (events.length === 0 || allowed > 0);
-  const percent = finished
+  const creep = finished
     ? 100
     : events.length === 0
       ? warm
@@ -357,6 +360,9 @@ export function LiveTest({
         ? Math.round(30 + (shown / events.length) * 70)
         : // The end is not known yet, so creep forward with each event.
           Math.min(90, 30 + shown * 3);
+  // When the check counts its steps, follow its real progress instead.
+  const percent =
+    !final && left?.fraction !== undefined ? Math.max(creep, Math.round(10 + left.fraction * 85)) : creep;
 
   const icon =
     target.kind === "website" ? (
@@ -379,9 +385,17 @@ export function LiveTest({
               {sub}
             </Text>
           </Box>
-          <Text c="dimmed" style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-            {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
-          </Text>
+          <Box ta="right" style={{ flexShrink: 0 }}>
+            <Text c="dimmed" style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
+            </Text>
+            {!finished && left && (
+              <Text size="xs" c="dimmed" mt={2} style={{ whiteSpace: "nowrap" }} aria-live="polite">
+                {left.short}
+                {left.by && ` · done around ${left.by}`}
+              </Text>
+            )}
+          </Box>
         </Group>
         <Progress value={percent} size={4} aria-label="Progress of the test" />
 

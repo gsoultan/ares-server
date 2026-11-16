@@ -17,7 +17,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
+	"github.com/gsoultan/ares-server/internal/eta"
 	"github.com/gsoultan/ares-server/internal/queue"
 	"github.com/gsoultan/ares-server/internal/report"
 	"github.com/gsoultan/ares-server/internal/uuid"
@@ -33,6 +35,14 @@ const tenantHeader = "X-Ares-Tenant"
 
 func tenantOf(r *http.Request) string {
 	return engagement.ResolveTenant(r.Header.Get(tenantHeader))
+}
+
+// boundToTenant reports whether the caller is confined to one workspace: an
+// authenticated account other than a super-admin. Such a caller may never name
+// another workspace, in a header or in a body.
+func boundToTenant(r *http.Request) (auth.Session, bool) {
+	sess, ok := auth.SessionFrom(r.Context())
+	return sess, ok && sess.Role != auth.RoleSuperAdmin
 }
 
 // Server holds the control-plane dependencies.
@@ -92,10 +102,26 @@ func (s *Server) createTenant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
+	// Creating a workspace is a platform action: only a super-admin may do it
+	// once accounts exist.
+	if _, bound := boundToTenant(r); bound {
+		writeError(w, http.StatusForbidden, "only a super-admin may create workspaces")
+		return
+	}
 	writeJSON(w, http.StatusCreated, s.store.CreateTenant(body.Name))
 }
 
 func (s *Server) listTenants(w http.ResponseWriter, r *http.Request) {
+	// A workspace-bound caller sees only its own workspace, never the names of
+	// the platform's other clients.
+	if sess, bound := boundToTenant(r); bound {
+		list := []any{}
+		if t, ok := s.store.GetTenant(sess.TenantID); ok {
+			list = append(list, t)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"tenants": list})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"tenants": s.store.ListTenants()})
 }
 
@@ -122,10 +148,15 @@ func (s *Server) createEngagement(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	// The body's tenantId wins; otherwise the workspace header applies.
+	// The body's tenantId wins; otherwise the workspace header applies. A
+	// workspace-bound caller may only name its own workspace.
 	tenantID := body.TenantID
 	if tenantID == "" {
 		tenantID = tenantOf(r)
+	}
+	if sess, bound := boundToTenant(r); bound && engagement.ResolveTenant(tenantID) != sess.TenantID {
+		writeError(w, http.StatusForbidden, "cross-workspace access denied")
+		return
 	}
 	eng, err := s.store.Create(tenantID, body.Name)
 	if err != nil {
@@ -305,14 +336,18 @@ func (s *Server) dispatchJob(w http.ResponseWriter, r *http.Request) {
 		body.Actor = "operator"
 	}
 	jobID := uuid.NewV7()
-	s.queue.Enqueue(queue.Job{
+	if err := s.queue.TryEnqueue(queue.Job{
 		ID:           jobID,
 		EngagementID: eng.ID,
 		Module:       body.Module,
 		Actor:        body.Actor,
 		Targets:      body.Targets,
 		Params:       body.Params,
-	})
+	}); err != nil {
+		w.Header().Set("Retry-After", "5")
+		http.Error(w, "job queue is full, try again shortly", http.StatusServiceUnavailable)
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"jobId":  jobID,
 		"status": "queued",
@@ -536,7 +571,16 @@ func (s *Server) getJob(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 		return
 	}
-	writeJSON(w, http.StatusOK, o)
+	// The outcome, plus how long it has left when the store can estimate it.
+	resp := struct {
+		worker.Outcome
+		TimeLeft *eta.Estimate `json:"timeLeft,omitempty"`
+	}{Outcome: o}
+	if est, can := s.outcomes.(worker.Estimator); can {
+		e := est.Estimate(o, time.Now())
+		resp.TimeLeft = &e
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) getAudit(w http.ResponseWriter, r *http.Request) {
