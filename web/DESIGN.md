@@ -71,6 +71,8 @@ The menu on the left is the map of the product.
 | Engagement: Scope and permission | What may be tested and who allowed it |
 | Engagement: Target profile | What the target is built with, and which tests that makes worth running |
 | Engagement: Agents | The testing agents installed inside the client's network with the owner's permission: add one, see what it may do and what it did, remove it |
+| Engagement: How far tests go | The deepest level Ares may use (safe proof, active confirmation, intrusive), and the single-use approvals for intrusive tests |
+| Engagement: Resilience test | Set up a bounded load ramp, approve it for one target, watch it run with Stop now, and read where capacity ends |
 | Engagement: Run tests | Start a test, see earlier tests, read results |
 | Engagement: Findings | The weaknesses found; one opens with fix steps, proof, status and re-check |
 | Engagement: Risk picture | How findings combine into routes an attacker could take |

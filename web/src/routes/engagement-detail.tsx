@@ -30,6 +30,8 @@ import { AgentDetail } from "../features/agents/AgentDetail.tsx";
 import { AgentsSection } from "../features/agents/AgentsSection.tsx";
 import { useAgentActivity } from "../features/agents/data.ts";
 import { useFoundBy } from "../features/findings/foundBy.ts";
+import { RESILIENCE, ResilienceTest } from "../features/consent/Resilience.tsx";
+import { IntensitySummary, TestIntensity } from "../features/consent/TestIntensity.tsx";
 
 const route = getRouteApi("/engagements/$id");
 
@@ -106,6 +108,24 @@ export function EngagementDetailPage() {
     );
   }
 
+  // Choosing how far tests may go takes the whole page.
+  if (view === "setup" && search.page === "intensity" && eng.status !== "draft") {
+    return <TestIntensity engagement={eng} />;
+  }
+  // So does the resilience test: its setup, approval, run and result.
+  if (view === "testing" && search.test === RESILIENCE && (canTest || search.job)) {
+    return (
+      <ResilienceTest
+        key={search.job ?? "setup"}
+        engagement={eng}
+        jobId={search.job}
+        defaultTarget={profiles[0]?.target}
+        activity={activity.entries ?? []}
+        findings={findings}
+      />
+    );
+  }
+
   // The saved scope, in the server's own words, from the latest log entry.
   const scopeDetail = activity.entries?.findLast((e) => e.action === "scope-updated")?.detail;
   const scopeSummary = scopeDetail === undefined ? undefined : scopeText(scopeDetail);
@@ -175,6 +195,7 @@ export function EngagementDetailPage() {
             </Link>
           </Section>
         ))}
+      {view === "setup" && eng.status !== "draft" && <IntensitySummary engagement={eng} />}
 
       {view === "profile" && (
         <>

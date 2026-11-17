@@ -54,6 +54,11 @@ const MODULES: Record<string, ModuleInfo> = {
     summary: "Start here. Works out what the site is built with and recommends which tests to run. Changes nothing.",
     targets: "url",
   },
+  loadresilience: {
+    label: "Resilience test",
+    summary: "Raises load in steps to find where a website slows down, and stops at your limits. Intrusive: needs approval per run.",
+    targets: "url",
+  },
   webcheck: {
     label: "Website weakness check",
     summary: "Looks for common website mistakes, such as exposed files and missing protections. Read-only.",
@@ -290,6 +295,13 @@ const ACTIONS: Record<string, string> = {
   "agent.results": "Agent sent results",
   "agent.remove": "Agent removed",
   "agent.deregister": "Agent uninstalled itself",
+  "intensity-set": "Test intensity changed",
+  "technique-approved": "Intrusive test approved",
+  "technique-declined": "Intrusive test declined",
+  "approval-used": "Approval used by a run",
+  "approval-withdrawn": "Approval withdrawn",
+  "approval-released": "Approval given back (the run did not start)",
+  "job-stopped": "Test stopped by hand",
 };
 
 export function actionLabel(action: string): string {
