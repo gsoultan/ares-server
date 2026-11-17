@@ -59,3 +59,24 @@ func TestRunnerRejectsNonDispatchableModule(t *testing.T) {
 		t.Fatal("a module outside the agent capability map must be refused")
 	}
 }
+
+func TestRunnerDispatchesAgentNative(t *testing.T) {
+	r, err := newRunner()
+	if err != nil {
+		t.Fatalf("newRunner: %v", err)
+	}
+	// egresscheck without a configured canary refuses, rather than sending.
+	res := r.Run(context.Background(), Task{TaskID: "n1", Capability: "egresscheck"})
+	if res.Error == "" {
+		t.Fatal("egresscheck with no canary configured must refuse")
+	}
+	// hostposture runs locally and returns one info result.
+	res = r.Run(context.Background(), Task{TaskID: "n2", Capability: "hostposture"})
+	if res.Error != "" {
+		t.Fatalf("hostposture: %s", res.Error)
+	}
+	var results []module.Result
+	if err := json.Unmarshal(res.Results, &results); err != nil || len(results) != 1 || results[0].Capability != "hostposture" {
+		t.Fatalf("hostposture results = %s (%v)", res.Results, err)
+	}
+}

@@ -23,6 +23,7 @@ const (
 	CapHostPosture  = "hostposture"  // local read-only posture (phase 2+)
 	CapPassiveSniff = "passivesniff" // passive exposure listening (phase 3)
 	CapMITMExposure = "mitmexposure" // MITM susceptibility, observation-only (phase 3)
+	CapEgressCheck  = "egresscheck"  // one benign request per channel to Ares's own canary (M-25)
 )
 
 // moduleGroup maps an engine module name to its capability group. Only modules
@@ -43,12 +44,23 @@ var moduleGroup = map[string]string{
 	// passive internal-exposure assessment (observation-only, inert)
 	"passivesniff": CapPassiveSniff,
 	"mitmexposure": CapMITMExposure,
+	// agent-native, read-only posture and the egress canary sender (see
+	// agentNative): they run in the agent, not as engine modules.
+	"hostposture": CapHostPosture,
+	"egresscheck": CapEgressCheck,
 }
+
+// agentNative lists the dispatchable capabilities implemented by the agent
+// itself rather than by an engine module.
+var agentNative = map[string]bool{"hostposture": true, "egresscheck": true}
+
+// IsAgentNative reports whether a module name is implemented by the agent.
+func IsAgentNative(module string) bool { return agentNative[module] }
 
 // AllCapabilities lists every capability group, for the operator UI. mitmexposure
 // is included but is off unless an operator adds it explicitly.
 func AllCapabilities() []string {
-	return []string{CapDiscovery, CapWebCheck, CapHostPosture, CapPassiveSniff, CapMITMExposure}
+	return []string{CapDiscovery, CapWebCheck, CapHostPosture, CapPassiveSniff, CapMITMExposure, CapEgressCheck}
 }
 
 // GroupOf returns the capability group a module belongs to, or "" if the module

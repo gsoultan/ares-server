@@ -240,6 +240,10 @@ func main() {
 		return runnable
 	})
 	grpcHandler.WithAgents(agentReg)
+	// Egress proof (M-25): tokens for the agent's egresscheck capability. Set
+	// ARES_CANARY_ALT_URL / ARES_CANARY_HIGH_URL to collaborator listeners on a
+	// non-standard HTTPS port and a high plain-HTTP port to test those channels.
+	grpcHandler.WithEgressCanary(canaryStore, canaryBase, canaryDomain, os.Getenv("ARES_CANARY_ALT_URL"), os.Getenv("ARES_CANARY_HIGH_URL"))
 	if settingsSvc != nil {
 		grpcHandler.WithSettings(settingsSvc)
 	}
