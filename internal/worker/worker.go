@@ -160,6 +160,15 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 		out.Error = fmt.Sprintf("unknown module %q", job.Module)
 		return finish()
 	}
+	// The adaptive loop runs other modules itself, so it gets the engagement's
+	// stored level, overriding anything the job carried.
+	if params, err := technique.WithEngagementLevel(job.Module, job.Params, eng.TestLevel()); err != nil {
+		eng.Audit.Append(job.Actor, "job-refused", job.Module, "bad params: "+err.Error())
+		out.Error = fmt.Sprintf("bad params for %q: %v", job.Module, err)
+		return finish()
+	} else {
+		job.Params = params
+	}
 	// Apply per-job parameters to modules that accept them. The returned,
 	// configured instance is used for this job only.
 	if len(job.Params) > 0 {
@@ -191,7 +200,12 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 	// test intensity allows its level, and an intrusive one only with a recorded,
 	// single-use approval for every target it will touch. The dispatch handlers
 	// check the same first; this is the check that cannot be skipped.
-	level := technique.LevelOf(p.reg, job.Module)
+	level, err := technique.LevelForJob(p.reg, job.Module, job.Params)
+	if err != nil {
+		eng.Audit.Append(job.Actor, "job-refused", job.Module, "consent level unknown: "+err.Error())
+		out.Error = err.Error()
+		return finish()
+	}
 	approvals, err := eng.ConsentGate(job.Module, level, allowed, job.ID)
 	if err != nil {
 		eng.Audit.Append(job.Actor, "job-refused", job.Module, err.Error())
