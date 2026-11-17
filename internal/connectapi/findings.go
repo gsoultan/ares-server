@@ -351,6 +351,8 @@ func (h *Handler) collectFindings(engIDs []string, engName map[string]string) []
 				if s, err := mapToStruct(r.Data); err == nil {
 					f.Data = s
 				}
+				f.Proof = proofProto(r.Proof)
+				f.Remediation = remediationProto(r)
 				a = &agg{f: f, foundAt: o.StartedAt, lastSeen: o.StartedAt, module: r.Capability, target: target}
 				byID[id] = a
 				order = append(order, id)
@@ -369,6 +371,8 @@ func (h *Handler) collectFindings(engIDs []string, engName map[string]string) []
 				if s, err := mapToStruct(r.Data); err == nil {
 					a.f.Data = s
 				}
+				a.f.Proof = proofProto(r.Proof)
+				a.f.Remediation = remediationProto(r)
 			}
 		}
 	}

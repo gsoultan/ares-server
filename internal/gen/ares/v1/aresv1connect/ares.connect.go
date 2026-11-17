@@ -70,6 +70,12 @@ const (
 	// ControlPlaneSetFindingStatusProcedure is the fully-qualified name of the ControlPlane's
 	// SetFindingStatus RPC.
 	ControlPlaneSetFindingStatusProcedure = "/ares.v1.ControlPlane/SetFindingStatus"
+	// ControlPlaneRecheckFindingProcedure is the fully-qualified name of the ControlPlane's
+	// RecheckFinding RPC.
+	ControlPlaneRecheckFindingProcedure = "/ares.v1.ControlPlane/RecheckFinding"
+	// ControlPlaneGetProofArtifactProcedure is the fully-qualified name of the ControlPlane's
+	// GetProofArtifact RPC.
+	ControlPlaneGetProofArtifactProcedure = "/ares.v1.ControlPlane/GetProofArtifact"
 	// ControlPlaneGetAuditProcedure is the fully-qualified name of the ControlPlane's GetAudit RPC.
 	ControlPlaneGetAuditProcedure = "/ares.v1.ControlPlane/GetAudit"
 	// ControlPlaneGenerateReportProcedure is the fully-qualified name of the ControlPlane's
@@ -148,6 +154,55 @@ const (
 	ControlPlaneDispatchAgentJobProcedure = "/ares.v1.ControlPlane/DispatchAgentJob"
 )
 
+// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
+var (
+	controlPlaneServiceDescriptor                      = v1.File_ares_v1_ares_proto.Services().ByName("ControlPlane")
+	controlPlaneListModulesMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("ListModules")
+	controlPlaneCreateTenantMethodDescriptor           = controlPlaneServiceDescriptor.Methods().ByName("CreateTenant")
+	controlPlaneListTenantsMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("ListTenants")
+	controlPlaneCreateEngagementMethodDescriptor       = controlPlaneServiceDescriptor.Methods().ByName("CreateEngagement")
+	controlPlaneListEngagementsMethodDescriptor        = controlPlaneServiceDescriptor.Methods().ByName("ListEngagements")
+	controlPlaneGetEngagementMethodDescriptor          = controlPlaneServiceDescriptor.Methods().ByName("GetEngagement")
+	controlPlaneSetScopeMethodDescriptor               = controlPlaneServiceDescriptor.Methods().ByName("SetScope")
+	controlPlaneAuthorizeMethodDescriptor              = controlPlaneServiceDescriptor.Methods().ByName("Authorize")
+	controlPlaneHaltMethodDescriptor                   = controlPlaneServiceDescriptor.Methods().ByName("Halt")
+	controlPlaneDispatchJobMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("DispatchJob")
+	controlPlaneGetJobMethodDescriptor                 = controlPlaneServiceDescriptor.Methods().ByName("GetJob")
+	controlPlaneListJobsMethodDescriptor               = controlPlaneServiceDescriptor.Methods().ByName("ListJobs")
+	controlPlaneListFindingsMethodDescriptor           = controlPlaneServiceDescriptor.Methods().ByName("ListFindings")
+	controlPlaneSetFindingStatusMethodDescriptor       = controlPlaneServiceDescriptor.Methods().ByName("SetFindingStatus")
+	controlPlaneRecheckFindingMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("RecheckFinding")
+	controlPlaneGetProofArtifactMethodDescriptor       = controlPlaneServiceDescriptor.Methods().ByName("GetProofArtifact")
+	controlPlaneGetAuditMethodDescriptor               = controlPlaneServiceDescriptor.Methods().ByName("GetAudit")
+	controlPlaneGenerateReportMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("GenerateReport")
+	controlPlaneGetDetectionSummaryMethodDescriptor    = controlPlaneServiceDescriptor.Methods().ByName("GetDetectionSummary")
+	controlPlaneSetDetectionMethodDescriptor           = controlPlaneServiceDescriptor.Methods().ByName("SetDetection")
+	controlPlaneGetRiskPictureMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("GetRiskPicture")
+	controlPlaneListPurpleTemplatesMethodDescriptor    = controlPlaneServiceDescriptor.Methods().ByName("ListPurpleTemplates")
+	controlPlaneGetPurpleTemplateMethodDescriptor      = controlPlaneServiceDescriptor.Methods().ByName("GetPurpleTemplate")
+	controlPlaneAdviseMethodDescriptor                 = controlPlaneServiceDescriptor.Methods().ByName("Advise")
+	controlPlaneGetSettingsMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("GetSettings")
+	controlPlaneUpdateSettingsMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("UpdateSettings")
+	controlPlaneTestAIProviderMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("TestAIProvider")
+	controlPlaneGetSetupStatusMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("GetSetupStatus")
+	controlPlaneTestDatabaseConnectionMethodDescriptor = controlPlaneServiceDescriptor.Methods().ByName("TestDatabaseConnection")
+	controlPlaneCommitSetupMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("CommitSetup")
+	controlPlaneLoginMethodDescriptor                  = controlPlaneServiceDescriptor.Methods().ByName("Login")
+	controlPlaneLogoutMethodDescriptor                 = controlPlaneServiceDescriptor.Methods().ByName("Logout")
+	controlPlaneCurrentUserMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("CurrentUser")
+	controlPlaneListUsersMethodDescriptor              = controlPlaneServiceDescriptor.Methods().ByName("ListUsers")
+	controlPlaneCreateUserMethodDescriptor             = controlPlaneServiceDescriptor.Methods().ByName("CreateUser")
+	controlPlaneSetUserRoleMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("SetUserRole")
+	controlPlaneSetUserDisabledMethodDescriptor        = controlPlaneServiceDescriptor.Methods().ByName("SetUserDisabled")
+	controlPlaneMintAgentKeyMethodDescriptor           = controlPlaneServiceDescriptor.Methods().ByName("MintAgentKey")
+	controlPlaneCancelAgentKeyMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("CancelAgentKey")
+	controlPlaneListAgentKeysMethodDescriptor          = controlPlaneServiceDescriptor.Methods().ByName("ListAgentKeys")
+	controlPlaneListAgentsMethodDescriptor             = controlPlaneServiceDescriptor.Methods().ByName("ListAgents")
+	controlPlaneGetAgentMethodDescriptor               = controlPlaneServiceDescriptor.Methods().ByName("GetAgent")
+	controlPlaneRemoveAgentMethodDescriptor            = controlPlaneServiceDescriptor.Methods().ByName("RemoveAgent")
+	controlPlaneDispatchAgentJobMethodDescriptor       = controlPlaneServiceDescriptor.Methods().ByName("DispatchAgentJob")
+)
+
 // ControlPlaneClient is a client for the ares.v1.ControlPlane service.
 type ControlPlaneClient interface {
 	ListModules(context.Context, *connect.Request[v1.ListModulesRequest]) (*connect.Response[v1.ListModulesResponse], error)
@@ -169,6 +224,15 @@ type ControlPlaneClient interface {
 	ListFindings(context.Context, *connect.Request[v1.ListFindingsRequest]) (*connect.Response[v1.ListFindingsResponse], error)
 	// SetFindingStatus records the operator's triage state for a finding.
 	SetFindingStatus(context.Context, *connect.Request[v1.SetFindingStatusRequest]) (*connect.Response[v1.Finding], error)
+	// RecheckFinding reproduces a finding's proof on demand: it dispatches the
+	// finding's narrowed re-check probe through the normal scope gate and returns
+	// the job it started. Reproduction is confirmed when that job emits a proof
+	// with the same claim.
+	RecheckFinding(context.Context, *connect.Request[v1.RecheckFindingRequest]) (*connect.Response[v1.RecheckFindingResponse], error)
+	// GetProofArtifact returns a finding's proof as a downloadable JSON record
+	// plus the audit entry (seq and chain hash) that anchors its fingerprint, so a
+	// user can verify it offline.
+	GetProofArtifact(context.Context, *connect.Request[v1.GetProofArtifactRequest]) (*connect.Response[v1.GetProofArtifactResponse], error)
 	GetAudit(context.Context, *connect.Request[v1.GetAuditRequest]) (*connect.Response[v1.GetAuditResponse], error)
 	GenerateReport(context.Context, *connect.Request[v1.GenerateReportRequest]) (*connect.Response[v1.GenerateReportResponse], error)
 	GetDetectionSummary(context.Context, *connect.Request[v1.GetDetectionSummaryRequest]) (*connect.Response[v1.DetectionSummary], error)
@@ -248,258 +312,269 @@ type ControlPlaneClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewControlPlaneClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ControlPlaneClient {
 	baseURL = strings.TrimRight(baseURL, "/")
-	controlPlaneMethods := v1.File_ares_v1_ares_proto.Services().ByName("ControlPlane").Methods()
 	return &controlPlaneClient{
 		listModules: connect.NewClient[v1.ListModulesRequest, v1.ListModulesResponse](
 			httpClient,
 			baseURL+ControlPlaneListModulesProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListModules")),
+			connect.WithSchema(controlPlaneListModulesMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		createTenant: connect.NewClient[v1.CreateTenantRequest, v1.Tenant](
 			httpClient,
 			baseURL+ControlPlaneCreateTenantProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("CreateTenant")),
+			connect.WithSchema(controlPlaneCreateTenantMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listTenants: connect.NewClient[v1.ListTenantsRequest, v1.ListTenantsResponse](
 			httpClient,
 			baseURL+ControlPlaneListTenantsProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListTenants")),
+			connect.WithSchema(controlPlaneListTenantsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		createEngagement: connect.NewClient[v1.CreateEngagementRequest, v1.Engagement](
 			httpClient,
 			baseURL+ControlPlaneCreateEngagementProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("CreateEngagement")),
+			connect.WithSchema(controlPlaneCreateEngagementMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listEngagements: connect.NewClient[v1.ListEngagementsRequest, v1.ListEngagementsResponse](
 			httpClient,
 			baseURL+ControlPlaneListEngagementsProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListEngagements")),
+			connect.WithSchema(controlPlaneListEngagementsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getEngagement: connect.NewClient[v1.GetEngagementRequest, v1.Engagement](
 			httpClient,
 			baseURL+ControlPlaneGetEngagementProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetEngagement")),
+			connect.WithSchema(controlPlaneGetEngagementMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		setScope: connect.NewClient[v1.SetScopeRequest, v1.Engagement](
 			httpClient,
 			baseURL+ControlPlaneSetScopeProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("SetScope")),
+			connect.WithSchema(controlPlaneSetScopeMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		authorize: connect.NewClient[v1.AuthorizeRequest, v1.Engagement](
 			httpClient,
 			baseURL+ControlPlaneAuthorizeProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("Authorize")),
+			connect.WithSchema(controlPlaneAuthorizeMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		halt: connect.NewClient[v1.HaltRequest, v1.Engagement](
 			httpClient,
 			baseURL+ControlPlaneHaltProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("Halt")),
+			connect.WithSchema(controlPlaneHaltMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		dispatchJob: connect.NewClient[v1.DispatchJobRequest, v1.DispatchJobResponse](
 			httpClient,
 			baseURL+ControlPlaneDispatchJobProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("DispatchJob")),
+			connect.WithSchema(controlPlaneDispatchJobMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getJob: connect.NewClient[v1.GetJobRequest, v1.JobOutcome](
 			httpClient,
 			baseURL+ControlPlaneGetJobProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetJob")),
+			connect.WithSchema(controlPlaneGetJobMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listJobs: connect.NewClient[v1.ListJobsRequest, v1.ListJobsResponse](
 			httpClient,
 			baseURL+ControlPlaneListJobsProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListJobs")),
+			connect.WithSchema(controlPlaneListJobsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listFindings: connect.NewClient[v1.ListFindingsRequest, v1.ListFindingsResponse](
 			httpClient,
 			baseURL+ControlPlaneListFindingsProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListFindings")),
+			connect.WithSchema(controlPlaneListFindingsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		setFindingStatus: connect.NewClient[v1.SetFindingStatusRequest, v1.Finding](
 			httpClient,
 			baseURL+ControlPlaneSetFindingStatusProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("SetFindingStatus")),
+			connect.WithSchema(controlPlaneSetFindingStatusMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
+		recheckFinding: connect.NewClient[v1.RecheckFindingRequest, v1.RecheckFindingResponse](
+			httpClient,
+			baseURL+ControlPlaneRecheckFindingProcedure,
+			connect.WithSchema(controlPlaneRecheckFindingMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
+		getProofArtifact: connect.NewClient[v1.GetProofArtifactRequest, v1.GetProofArtifactResponse](
+			httpClient,
+			baseURL+ControlPlaneGetProofArtifactProcedure,
+			connect.WithSchema(controlPlaneGetProofArtifactMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getAudit: connect.NewClient[v1.GetAuditRequest, v1.GetAuditResponse](
 			httpClient,
 			baseURL+ControlPlaneGetAuditProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetAudit")),
+			connect.WithSchema(controlPlaneGetAuditMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		generateReport: connect.NewClient[v1.GenerateReportRequest, v1.GenerateReportResponse](
 			httpClient,
 			baseURL+ControlPlaneGenerateReportProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GenerateReport")),
+			connect.WithSchema(controlPlaneGenerateReportMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getDetectionSummary: connect.NewClient[v1.GetDetectionSummaryRequest, v1.DetectionSummary](
 			httpClient,
 			baseURL+ControlPlaneGetDetectionSummaryProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetDetectionSummary")),
+			connect.WithSchema(controlPlaneGetDetectionSummaryMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		setDetection: connect.NewClient[v1.SetDetectionRequest, v1.DetectionSummary](
 			httpClient,
 			baseURL+ControlPlaneSetDetectionProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("SetDetection")),
+			connect.WithSchema(controlPlaneSetDetectionMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getRiskPicture: connect.NewClient[v1.GetRiskPictureRequest, v1.RiskPicture](
 			httpClient,
 			baseURL+ControlPlaneGetRiskPictureProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetRiskPicture")),
+			connect.WithSchema(controlPlaneGetRiskPictureMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listPurpleTemplates: connect.NewClient[v1.ListPurpleTemplatesRequest, v1.ListPurpleTemplatesResponse](
 			httpClient,
 			baseURL+ControlPlaneListPurpleTemplatesProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListPurpleTemplates")),
+			connect.WithSchema(controlPlaneListPurpleTemplatesMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getPurpleTemplate: connect.NewClient[v1.GetPurpleTemplateRequest, v1.PurpleTemplate](
 			httpClient,
 			baseURL+ControlPlaneGetPurpleTemplateProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetPurpleTemplate")),
+			connect.WithSchema(controlPlaneGetPurpleTemplateMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		advise: connect.NewClient[v1.AdviseRequest, v1.AdviseResponse](
 			httpClient,
 			baseURL+ControlPlaneAdviseProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("Advise")),
+			connect.WithSchema(controlPlaneAdviseMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getSettings: connect.NewClient[v1.GetSettingsRequest, v1.SettingsView](
 			httpClient,
 			baseURL+ControlPlaneGetSettingsProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetSettings")),
+			connect.WithSchema(controlPlaneGetSettingsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		updateSettings: connect.NewClient[v1.UpdateSettingsRequest, v1.SettingsView](
 			httpClient,
 			baseURL+ControlPlaneUpdateSettingsProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("UpdateSettings")),
+			connect.WithSchema(controlPlaneUpdateSettingsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		testAIProvider: connect.NewClient[v1.TestAIProviderRequest, v1.TestAIProviderResponse](
 			httpClient,
 			baseURL+ControlPlaneTestAIProviderProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("TestAIProvider")),
+			connect.WithSchema(controlPlaneTestAIProviderMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getSetupStatus: connect.NewClient[v1.GetSetupStatusRequest, v1.SetupStatus](
 			httpClient,
 			baseURL+ControlPlaneGetSetupStatusProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetSetupStatus")),
+			connect.WithSchema(controlPlaneGetSetupStatusMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		testDatabaseConnection: connect.NewClient[v1.TestDatabaseConnectionRequest, v1.TestDatabaseConnectionResponse](
 			httpClient,
 			baseURL+ControlPlaneTestDatabaseConnectionProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("TestDatabaseConnection")),
+			connect.WithSchema(controlPlaneTestDatabaseConnectionMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		commitSetup: connect.NewClient[v1.CommitSetupRequest, v1.CommitSetupResponse](
 			httpClient,
 			baseURL+ControlPlaneCommitSetupProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("CommitSetup")),
+			connect.WithSchema(controlPlaneCommitSetupMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		login: connect.NewClient[v1.LoginRequest, v1.LoginResponse](
 			httpClient,
 			baseURL+ControlPlaneLoginProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("Login")),
+			connect.WithSchema(controlPlaneLoginMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		logout: connect.NewClient[v1.LogoutRequest, v1.LogoutResponse](
 			httpClient,
 			baseURL+ControlPlaneLogoutProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("Logout")),
+			connect.WithSchema(controlPlaneLogoutMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		currentUser: connect.NewClient[v1.CurrentUserRequest, v1.UserInfo](
 			httpClient,
 			baseURL+ControlPlaneCurrentUserProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("CurrentUser")),
+			connect.WithSchema(controlPlaneCurrentUserMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listUsers: connect.NewClient[v1.ListUsersRequest, v1.ListUsersResponse](
 			httpClient,
 			baseURL+ControlPlaneListUsersProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListUsers")),
+			connect.WithSchema(controlPlaneListUsersMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		createUser: connect.NewClient[v1.CreateUserRequest, v1.UserInfo](
 			httpClient,
 			baseURL+ControlPlaneCreateUserProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("CreateUser")),
+			connect.WithSchema(controlPlaneCreateUserMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		setUserRole: connect.NewClient[v1.SetUserRoleRequest, v1.UserInfo](
 			httpClient,
 			baseURL+ControlPlaneSetUserRoleProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("SetUserRole")),
+			connect.WithSchema(controlPlaneSetUserRoleMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		setUserDisabled: connect.NewClient[v1.SetUserDisabledRequest, v1.UserInfo](
 			httpClient,
 			baseURL+ControlPlaneSetUserDisabledProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("SetUserDisabled")),
+			connect.WithSchema(controlPlaneSetUserDisabledMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		mintAgentKey: connect.NewClient[v1.MintAgentKeyRequest, v1.MintAgentKeyResponse](
 			httpClient,
 			baseURL+ControlPlaneMintAgentKeyProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("MintAgentKey")),
+			connect.WithSchema(controlPlaneMintAgentKeyMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		cancelAgentKey: connect.NewClient[v1.CancelAgentKeyRequest, v1.CancelAgentKeyResponse](
 			httpClient,
 			baseURL+ControlPlaneCancelAgentKeyProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("CancelAgentKey")),
+			connect.WithSchema(controlPlaneCancelAgentKeyMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listAgentKeys: connect.NewClient[v1.ListAgentKeysRequest, v1.ListAgentKeysResponse](
 			httpClient,
 			baseURL+ControlPlaneListAgentKeysProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListAgentKeys")),
+			connect.WithSchema(controlPlaneListAgentKeysMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		listAgents: connect.NewClient[v1.ListAgentsRequest, v1.ListAgentsResponse](
 			httpClient,
 			baseURL+ControlPlaneListAgentsProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("ListAgents")),
+			connect.WithSchema(controlPlaneListAgentsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		getAgent: connect.NewClient[v1.GetAgentRequest, v1.AgentView](
 			httpClient,
 			baseURL+ControlPlaneGetAgentProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("GetAgent")),
+			connect.WithSchema(controlPlaneGetAgentMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		removeAgent: connect.NewClient[v1.RemoveAgentRequest, v1.RemoveAgentResponse](
 			httpClient,
 			baseURL+ControlPlaneRemoveAgentProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("RemoveAgent")),
+			connect.WithSchema(controlPlaneRemoveAgentMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		dispatchAgentJob: connect.NewClient[v1.DispatchAgentJobRequest, v1.DispatchAgentJobResponse](
 			httpClient,
 			baseURL+ControlPlaneDispatchAgentJobProcedure,
-			connect.WithSchema(controlPlaneMethods.ByName("DispatchAgentJob")),
+			connect.WithSchema(controlPlaneDispatchAgentJobMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -521,6 +596,8 @@ type controlPlaneClient struct {
 	listJobs               *connect.Client[v1.ListJobsRequest, v1.ListJobsResponse]
 	listFindings           *connect.Client[v1.ListFindingsRequest, v1.ListFindingsResponse]
 	setFindingStatus       *connect.Client[v1.SetFindingStatusRequest, v1.Finding]
+	recheckFinding         *connect.Client[v1.RecheckFindingRequest, v1.RecheckFindingResponse]
+	getProofArtifact       *connect.Client[v1.GetProofArtifactRequest, v1.GetProofArtifactResponse]
 	getAudit               *connect.Client[v1.GetAuditRequest, v1.GetAuditResponse]
 	generateReport         *connect.Client[v1.GenerateReportRequest, v1.GenerateReportResponse]
 	getDetectionSummary    *connect.Client[v1.GetDetectionSummaryRequest, v1.DetectionSummary]
@@ -619,6 +696,16 @@ func (c *controlPlaneClient) ListFindings(ctx context.Context, req *connect.Requ
 // SetFindingStatus calls ares.v1.ControlPlane.SetFindingStatus.
 func (c *controlPlaneClient) SetFindingStatus(ctx context.Context, req *connect.Request[v1.SetFindingStatusRequest]) (*connect.Response[v1.Finding], error) {
 	return c.setFindingStatus.CallUnary(ctx, req)
+}
+
+// RecheckFinding calls ares.v1.ControlPlane.RecheckFinding.
+func (c *controlPlaneClient) RecheckFinding(ctx context.Context, req *connect.Request[v1.RecheckFindingRequest]) (*connect.Response[v1.RecheckFindingResponse], error) {
+	return c.recheckFinding.CallUnary(ctx, req)
+}
+
+// GetProofArtifact calls ares.v1.ControlPlane.GetProofArtifact.
+func (c *controlPlaneClient) GetProofArtifact(ctx context.Context, req *connect.Request[v1.GetProofArtifactRequest]) (*connect.Response[v1.GetProofArtifactResponse], error) {
+	return c.getProofArtifact.CallUnary(ctx, req)
 }
 
 // GetAudit calls ares.v1.ControlPlane.GetAudit.
@@ -782,6 +869,15 @@ type ControlPlaneHandler interface {
 	ListFindings(context.Context, *connect.Request[v1.ListFindingsRequest]) (*connect.Response[v1.ListFindingsResponse], error)
 	// SetFindingStatus records the operator's triage state for a finding.
 	SetFindingStatus(context.Context, *connect.Request[v1.SetFindingStatusRequest]) (*connect.Response[v1.Finding], error)
+	// RecheckFinding reproduces a finding's proof on demand: it dispatches the
+	// finding's narrowed re-check probe through the normal scope gate and returns
+	// the job it started. Reproduction is confirmed when that job emits a proof
+	// with the same claim.
+	RecheckFinding(context.Context, *connect.Request[v1.RecheckFindingRequest]) (*connect.Response[v1.RecheckFindingResponse], error)
+	// GetProofArtifact returns a finding's proof as a downloadable JSON record
+	// plus the audit entry (seq and chain hash) that anchors its fingerprint, so a
+	// user can verify it offline.
+	GetProofArtifact(context.Context, *connect.Request[v1.GetProofArtifactRequest]) (*connect.Response[v1.GetProofArtifactResponse], error)
 	GetAudit(context.Context, *connect.Request[v1.GetAuditRequest]) (*connect.Response[v1.GetAuditResponse], error)
 	GenerateReport(context.Context, *connect.Request[v1.GenerateReportRequest]) (*connect.Response[v1.GenerateReportResponse], error)
 	GetDetectionSummary(context.Context, *connect.Request[v1.GetDetectionSummaryRequest]) (*connect.Response[v1.DetectionSummary], error)
@@ -858,257 +954,268 @@ type ControlPlaneHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOption) (string, http.Handler) {
-	controlPlaneMethods := v1.File_ares_v1_ares_proto.Services().ByName("ControlPlane").Methods()
 	controlPlaneListModulesHandler := connect.NewUnaryHandler(
 		ControlPlaneListModulesProcedure,
 		svc.ListModules,
-		connect.WithSchema(controlPlaneMethods.ByName("ListModules")),
+		connect.WithSchema(controlPlaneListModulesMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneCreateTenantHandler := connect.NewUnaryHandler(
 		ControlPlaneCreateTenantProcedure,
 		svc.CreateTenant,
-		connect.WithSchema(controlPlaneMethods.ByName("CreateTenant")),
+		connect.WithSchema(controlPlaneCreateTenantMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListTenantsHandler := connect.NewUnaryHandler(
 		ControlPlaneListTenantsProcedure,
 		svc.ListTenants,
-		connect.WithSchema(controlPlaneMethods.ByName("ListTenants")),
+		connect.WithSchema(controlPlaneListTenantsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneCreateEngagementHandler := connect.NewUnaryHandler(
 		ControlPlaneCreateEngagementProcedure,
 		svc.CreateEngagement,
-		connect.WithSchema(controlPlaneMethods.ByName("CreateEngagement")),
+		connect.WithSchema(controlPlaneCreateEngagementMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListEngagementsHandler := connect.NewUnaryHandler(
 		ControlPlaneListEngagementsProcedure,
 		svc.ListEngagements,
-		connect.WithSchema(controlPlaneMethods.ByName("ListEngagements")),
+		connect.WithSchema(controlPlaneListEngagementsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetEngagementHandler := connect.NewUnaryHandler(
 		ControlPlaneGetEngagementProcedure,
 		svc.GetEngagement,
-		connect.WithSchema(controlPlaneMethods.ByName("GetEngagement")),
+		connect.WithSchema(controlPlaneGetEngagementMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneSetScopeHandler := connect.NewUnaryHandler(
 		ControlPlaneSetScopeProcedure,
 		svc.SetScope,
-		connect.WithSchema(controlPlaneMethods.ByName("SetScope")),
+		connect.WithSchema(controlPlaneSetScopeMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneAuthorizeHandler := connect.NewUnaryHandler(
 		ControlPlaneAuthorizeProcedure,
 		svc.Authorize,
-		connect.WithSchema(controlPlaneMethods.ByName("Authorize")),
+		connect.WithSchema(controlPlaneAuthorizeMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneHaltHandler := connect.NewUnaryHandler(
 		ControlPlaneHaltProcedure,
 		svc.Halt,
-		connect.WithSchema(controlPlaneMethods.ByName("Halt")),
+		connect.WithSchema(controlPlaneHaltMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneDispatchJobHandler := connect.NewUnaryHandler(
 		ControlPlaneDispatchJobProcedure,
 		svc.DispatchJob,
-		connect.WithSchema(controlPlaneMethods.ByName("DispatchJob")),
+		connect.WithSchema(controlPlaneDispatchJobMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetJobHandler := connect.NewUnaryHandler(
 		ControlPlaneGetJobProcedure,
 		svc.GetJob,
-		connect.WithSchema(controlPlaneMethods.ByName("GetJob")),
+		connect.WithSchema(controlPlaneGetJobMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListJobsHandler := connect.NewUnaryHandler(
 		ControlPlaneListJobsProcedure,
 		svc.ListJobs,
-		connect.WithSchema(controlPlaneMethods.ByName("ListJobs")),
+		connect.WithSchema(controlPlaneListJobsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListFindingsHandler := connect.NewUnaryHandler(
 		ControlPlaneListFindingsProcedure,
 		svc.ListFindings,
-		connect.WithSchema(controlPlaneMethods.ByName("ListFindings")),
+		connect.WithSchema(controlPlaneListFindingsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneSetFindingStatusHandler := connect.NewUnaryHandler(
 		ControlPlaneSetFindingStatusProcedure,
 		svc.SetFindingStatus,
-		connect.WithSchema(controlPlaneMethods.ByName("SetFindingStatus")),
+		connect.WithSchema(controlPlaneSetFindingStatusMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneRecheckFindingHandler := connect.NewUnaryHandler(
+		ControlPlaneRecheckFindingProcedure,
+		svc.RecheckFinding,
+		connect.WithSchema(controlPlaneRecheckFindingMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneGetProofArtifactHandler := connect.NewUnaryHandler(
+		ControlPlaneGetProofArtifactProcedure,
+		svc.GetProofArtifact,
+		connect.WithSchema(controlPlaneGetProofArtifactMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetAuditHandler := connect.NewUnaryHandler(
 		ControlPlaneGetAuditProcedure,
 		svc.GetAudit,
-		connect.WithSchema(controlPlaneMethods.ByName("GetAudit")),
+		connect.WithSchema(controlPlaneGetAuditMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGenerateReportHandler := connect.NewUnaryHandler(
 		ControlPlaneGenerateReportProcedure,
 		svc.GenerateReport,
-		connect.WithSchema(controlPlaneMethods.ByName("GenerateReport")),
+		connect.WithSchema(controlPlaneGenerateReportMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetDetectionSummaryHandler := connect.NewUnaryHandler(
 		ControlPlaneGetDetectionSummaryProcedure,
 		svc.GetDetectionSummary,
-		connect.WithSchema(controlPlaneMethods.ByName("GetDetectionSummary")),
+		connect.WithSchema(controlPlaneGetDetectionSummaryMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneSetDetectionHandler := connect.NewUnaryHandler(
 		ControlPlaneSetDetectionProcedure,
 		svc.SetDetection,
-		connect.WithSchema(controlPlaneMethods.ByName("SetDetection")),
+		connect.WithSchema(controlPlaneSetDetectionMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetRiskPictureHandler := connect.NewUnaryHandler(
 		ControlPlaneGetRiskPictureProcedure,
 		svc.GetRiskPicture,
-		connect.WithSchema(controlPlaneMethods.ByName("GetRiskPicture")),
+		connect.WithSchema(controlPlaneGetRiskPictureMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListPurpleTemplatesHandler := connect.NewUnaryHandler(
 		ControlPlaneListPurpleTemplatesProcedure,
 		svc.ListPurpleTemplates,
-		connect.WithSchema(controlPlaneMethods.ByName("ListPurpleTemplates")),
+		connect.WithSchema(controlPlaneListPurpleTemplatesMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetPurpleTemplateHandler := connect.NewUnaryHandler(
 		ControlPlaneGetPurpleTemplateProcedure,
 		svc.GetPurpleTemplate,
-		connect.WithSchema(controlPlaneMethods.ByName("GetPurpleTemplate")),
+		connect.WithSchema(controlPlaneGetPurpleTemplateMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneAdviseHandler := connect.NewUnaryHandler(
 		ControlPlaneAdviseProcedure,
 		svc.Advise,
-		connect.WithSchema(controlPlaneMethods.ByName("Advise")),
+		connect.WithSchema(controlPlaneAdviseMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetSettingsHandler := connect.NewUnaryHandler(
 		ControlPlaneGetSettingsProcedure,
 		svc.GetSettings,
-		connect.WithSchema(controlPlaneMethods.ByName("GetSettings")),
+		connect.WithSchema(controlPlaneGetSettingsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneUpdateSettingsHandler := connect.NewUnaryHandler(
 		ControlPlaneUpdateSettingsProcedure,
 		svc.UpdateSettings,
-		connect.WithSchema(controlPlaneMethods.ByName("UpdateSettings")),
+		connect.WithSchema(controlPlaneUpdateSettingsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneTestAIProviderHandler := connect.NewUnaryHandler(
 		ControlPlaneTestAIProviderProcedure,
 		svc.TestAIProvider,
-		connect.WithSchema(controlPlaneMethods.ByName("TestAIProvider")),
+		connect.WithSchema(controlPlaneTestAIProviderMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetSetupStatusHandler := connect.NewUnaryHandler(
 		ControlPlaneGetSetupStatusProcedure,
 		svc.GetSetupStatus,
-		connect.WithSchema(controlPlaneMethods.ByName("GetSetupStatus")),
+		connect.WithSchema(controlPlaneGetSetupStatusMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneTestDatabaseConnectionHandler := connect.NewUnaryHandler(
 		ControlPlaneTestDatabaseConnectionProcedure,
 		svc.TestDatabaseConnection,
-		connect.WithSchema(controlPlaneMethods.ByName("TestDatabaseConnection")),
+		connect.WithSchema(controlPlaneTestDatabaseConnectionMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneCommitSetupHandler := connect.NewUnaryHandler(
 		ControlPlaneCommitSetupProcedure,
 		svc.CommitSetup,
-		connect.WithSchema(controlPlaneMethods.ByName("CommitSetup")),
+		connect.WithSchema(controlPlaneCommitSetupMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneLoginHandler := connect.NewUnaryHandler(
 		ControlPlaneLoginProcedure,
 		svc.Login,
-		connect.WithSchema(controlPlaneMethods.ByName("Login")),
+		connect.WithSchema(controlPlaneLoginMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneLogoutHandler := connect.NewUnaryHandler(
 		ControlPlaneLogoutProcedure,
 		svc.Logout,
-		connect.WithSchema(controlPlaneMethods.ByName("Logout")),
+		connect.WithSchema(controlPlaneLogoutMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneCurrentUserHandler := connect.NewUnaryHandler(
 		ControlPlaneCurrentUserProcedure,
 		svc.CurrentUser,
-		connect.WithSchema(controlPlaneMethods.ByName("CurrentUser")),
+		connect.WithSchema(controlPlaneCurrentUserMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListUsersHandler := connect.NewUnaryHandler(
 		ControlPlaneListUsersProcedure,
 		svc.ListUsers,
-		connect.WithSchema(controlPlaneMethods.ByName("ListUsers")),
+		connect.WithSchema(controlPlaneListUsersMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneCreateUserHandler := connect.NewUnaryHandler(
 		ControlPlaneCreateUserProcedure,
 		svc.CreateUser,
-		connect.WithSchema(controlPlaneMethods.ByName("CreateUser")),
+		connect.WithSchema(controlPlaneCreateUserMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneSetUserRoleHandler := connect.NewUnaryHandler(
 		ControlPlaneSetUserRoleProcedure,
 		svc.SetUserRole,
-		connect.WithSchema(controlPlaneMethods.ByName("SetUserRole")),
+		connect.WithSchema(controlPlaneSetUserRoleMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneSetUserDisabledHandler := connect.NewUnaryHandler(
 		ControlPlaneSetUserDisabledProcedure,
 		svc.SetUserDisabled,
-		connect.WithSchema(controlPlaneMethods.ByName("SetUserDisabled")),
+		connect.WithSchema(controlPlaneSetUserDisabledMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneMintAgentKeyHandler := connect.NewUnaryHandler(
 		ControlPlaneMintAgentKeyProcedure,
 		svc.MintAgentKey,
-		connect.WithSchema(controlPlaneMethods.ByName("MintAgentKey")),
+		connect.WithSchema(controlPlaneMintAgentKeyMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneCancelAgentKeyHandler := connect.NewUnaryHandler(
 		ControlPlaneCancelAgentKeyProcedure,
 		svc.CancelAgentKey,
-		connect.WithSchema(controlPlaneMethods.ByName("CancelAgentKey")),
+		connect.WithSchema(controlPlaneCancelAgentKeyMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListAgentKeysHandler := connect.NewUnaryHandler(
 		ControlPlaneListAgentKeysProcedure,
 		svc.ListAgentKeys,
-		connect.WithSchema(controlPlaneMethods.ByName("ListAgentKeys")),
+		connect.WithSchema(controlPlaneListAgentKeysMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListAgentsHandler := connect.NewUnaryHandler(
 		ControlPlaneListAgentsProcedure,
 		svc.ListAgents,
-		connect.WithSchema(controlPlaneMethods.ByName("ListAgents")),
+		connect.WithSchema(controlPlaneListAgentsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneGetAgentHandler := connect.NewUnaryHandler(
 		ControlPlaneGetAgentProcedure,
 		svc.GetAgent,
-		connect.WithSchema(controlPlaneMethods.ByName("GetAgent")),
+		connect.WithSchema(controlPlaneGetAgentMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneRemoveAgentHandler := connect.NewUnaryHandler(
 		ControlPlaneRemoveAgentProcedure,
 		svc.RemoveAgent,
-		connect.WithSchema(controlPlaneMethods.ByName("RemoveAgent")),
+		connect.WithSchema(controlPlaneRemoveAgentMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneDispatchAgentJobHandler := connect.NewUnaryHandler(
 		ControlPlaneDispatchAgentJobProcedure,
 		svc.DispatchAgentJob,
-		connect.WithSchema(controlPlaneMethods.ByName("DispatchAgentJob")),
+		connect.WithSchema(controlPlaneDispatchAgentJobMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/ares.v1.ControlPlane/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1141,6 +1248,10 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 			controlPlaneListFindingsHandler.ServeHTTP(w, r)
 		case ControlPlaneSetFindingStatusProcedure:
 			controlPlaneSetFindingStatusHandler.ServeHTTP(w, r)
+		case ControlPlaneRecheckFindingProcedure:
+			controlPlaneRecheckFindingHandler.ServeHTTP(w, r)
+		case ControlPlaneGetProofArtifactProcedure:
+			controlPlaneGetProofArtifactHandler.ServeHTTP(w, r)
 		case ControlPlaneGetAuditProcedure:
 			controlPlaneGetAuditHandler.ServeHTTP(w, r)
 		case ControlPlaneGenerateReportProcedure:
@@ -1260,6 +1371,14 @@ func (UnimplementedControlPlaneHandler) ListFindings(context.Context, *connect.R
 
 func (UnimplementedControlPlaneHandler) SetFindingStatus(context.Context, *connect.Request[v1.SetFindingStatusRequest]) (*connect.Response[v1.Finding], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.SetFindingStatus is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) RecheckFinding(context.Context, *connect.Request[v1.RecheckFindingRequest]) (*connect.Response[v1.RecheckFindingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.RecheckFinding is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) GetProofArtifact(context.Context, *connect.Request[v1.GetProofArtifactRequest]) (*connect.Response[v1.GetProofArtifactResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.GetProofArtifact is not implemented"))
 }
 
 func (UnimplementedControlPlaneHandler) GetAudit(context.Context, *connect.Request[v1.GetAuditRequest]) (*connect.Response[v1.GetAuditResponse], error) {

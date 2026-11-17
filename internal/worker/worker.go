@@ -251,6 +251,14 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 				fmt.Sprintf("name=%s sha256=%s", name, sha))
 			continue
 		}
+		// A finding carrying structured proof anchors its fingerprint into the
+		// hash-chained audit trail, so the recorded evidence cannot be altered
+		// without breaking the chain. The downloadable proof artifact references
+		// this entry's seq and hash.
+		if r.Kind == "finding" && r.Proof != nil {
+			eng.Audit.Append(job.Actor, "proof-recorded", r.Target.String(),
+				fmt.Sprintf("kind=%s claim=%s %s", r.Proof.Kind, r.Proof.Claim, r.Proof.Fingerprint))
+		}
 		eng.Audit.Append(job.Actor, "result", r.Target.String(),
 			fmt.Sprintf("%s/%s", r.Capability, r.Kind))
 	}
