@@ -29,6 +29,8 @@ github.com/gsoultan/ares v0.0.0-20261115103741-feca301f6ad3 h1:Ies83NEFUPPJTbauE
 github.com/gsoultan/ares v0.0.0-20261115103741-feca301f6ad3/go.mod h1:ANY3BQDYFHByC4d6M2OeGuuccgRza5oXjynw+oLvwyU=
 github.com/gsoultan/ares v0.0.0-20261116144153-7055c1d9642d h1:TnrSMppz6KYuGofRD1wO/ZczCtPAWK2ixm2vLhxo/5w=
 github.com/gsoultan/ares v0.0.0-20261116144153-7055c1d9642d/go.mod h1:ANY3BQDYFHByC4d6M2OeGuuccgRza5oXjynw+oLvwyU=
+github.com/gsoultan/ares v0.0.0-20261117143422-8d2f35420019 h1:wRRmi16qL3vJaR4UNTImUsv3nT1NHGQ1Nw//aIh7Yk0=
+github.com/gsoultan/ares v0.0.0-20261117143422-8d2f35420019/go.mod h1:ANY3BQDYFHByC4d6M2OeGuuccgRza5oXjynw+oLvwyU=
 github.com/gsoultan/storm v1.12.2 h1:7FPuJIRgaQWTHFSY6mx5UUNc1U0Y+Rr8wV26j9VU5As=
 github.com/gsoultan/storm v1.12.2/go.mod h1:3A1+XJrTQVQQyB3S8k0eGtt0liskql9EMcsXgTzpmLU=
 github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs4luLUK2k=

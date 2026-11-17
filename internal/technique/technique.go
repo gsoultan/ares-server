@@ -20,6 +20,8 @@
 package technique
 
 import (
+	"encoding/json"
+	"fmt"
 	"sort"
 
 	"github.com/gsoultan/ares/module"
@@ -63,6 +65,24 @@ var extra = map[string]struct {
 			Limit:      "Never more than the ceiling you set. No amplification, no spoofed sources, no botnet, and it never holds a system down.",
 		},
 	},
+	"uploadmarker": {
+		cap: module.Capability{
+			Level:    module.LevelActiveConfirmation,
+			Surface:  []module.SurfaceKind{module.SurfaceWeb},
+			Proofs:   []string{"marker-upload"},
+			Cost:     module.Cost{Requests: 3, Seconds: 5},
+			Recovery: "the inert text marker is deleted and its removal confirmed; without a delete endpoint the finding names the exact file to remove",
+		},
+		desc: Technique{
+			Name:       "File-upload marker",
+			Action:     "Uploads one small, inert text file that announces itself as an authorized test marker, then fetches it back to prove the upload is accepted and reachable.",
+			Risk:       "One harmless text file sits on the target between the upload and its removal.",
+			Reversible: true,
+			Recovery:   "Ares deletes the marker and confirms it is gone. When the site has no delete endpoint, the finding names the exact file so it can be removed by hand.",
+			Touches:    "Only the upload endpoint you name. No real file is read, changed or replaced.",
+			Limit:      "Never runnable content, never a web shell: the marker is plain text whatever its name.",
+		},
+	},
 }
 
 // Register describes the extra modules in the engine's registry. It is called
@@ -94,6 +114,51 @@ func LevelOf(reg *module.Registry, name string) module.ConsentLevel {
 		return c.Level
 	}
 	return module.LevelSafeProof
+}
+
+// LevelForJob returns the consent level a job of the module needs with its
+// params: the engine's own answer (module.Registry.LevelFor), so an opt-in
+// param that turns on a write (the SQL-injection sentinel marker) is gated at
+// the level of the write, not the module's default. Every consent gate checks
+// this level. An error means the level cannot be known; the caller refuses
+// the job.
+func LevelForJob(reg *module.Registry, name string, params json.RawMessage) (module.ConsentLevel, error) {
+	level, err := reg.LevelFor(name, params)
+	if err != nil {
+		return 0, err
+	}
+	if level < module.LevelSafeProof {
+		level = module.LevelSafeProof
+	}
+	return level, nil
+}
+
+// AssessModule is the engine's adaptive assessment loop, which plans and runs
+// other modules itself and so needs the engagement's level passed in.
+const AssessModule = "assess"
+
+// WithEngagementLevel sets the allowed level on an assess job's params from the
+// engagement's stored test intensity, replacing whatever the caller sent, so a
+// client cannot raise the level the loop runs at. Other modules' params are
+// returned unchanged. The loop never runs level 3 itself, whatever it is given.
+func WithEngagementLevel(name string, params json.RawMessage, level module.ConsentLevel) (json.RawMessage, error) {
+	if name != AssessModule {
+		return params, nil
+	}
+	m := map[string]any{}
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &m); err != nil {
+			return nil, fmt.Errorf("invalid params: %w", err)
+		}
+		if m == nil {
+			m = map[string]any{}
+		}
+	}
+	if level < module.LevelSafeProof {
+		level = module.LevelSafeProof
+	}
+	m["maxLevel"] = int(level)
+	return json.Marshal(m)
 }
 
 // Describe returns the description of a module above safe proof. ok is false
