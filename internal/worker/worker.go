@@ -15,12 +15,14 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gsoultan/ares-server/internal/engagement"
 	"github.com/gsoultan/ares-server/internal/eta"
 	"github.com/gsoultan/ares-server/internal/queue"
+	"github.com/gsoultan/ares-server/internal/technique"
 	"github.com/gsoultan/ares/module"
 	"github.com/gsoultan/ares/remediation"
 )
@@ -185,6 +187,19 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 	}
 	out.Allowed = allowed
 
+	// The consent gate. A test above safe proof runs only when the engagement's
+	// test intensity allows its level, and an intrusive one only with a recorded,
+	// single-use approval for every target it will touch. The dispatch handlers
+	// check the same first; this is the check that cannot be skipped.
+	level := technique.LevelOf(p.reg, job.Module)
+	approvals, err := eng.ConsentGate(job.Module, level, allowed, job.ID)
+	if err != nil {
+		eng.Audit.Append(job.Actor, "job-refused", job.Module, err.Error())
+		out.Error = err.Error()
+		return finish()
+	}
+	consentNote := consentData(level, approvals, p.reg, job.Module)
+
 	eng.Audit.Append(job.Actor, "job-started", job.Module,
 		fmt.Sprintf("%d allowed, %d denied", len(allowed), len(out.Denied)))
 	// Publish the gate decision immediately: a live view shows allowed/denied
@@ -203,6 +218,13 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 			// its technique and issue key. One seam covers every module.
 			if r.Kind == "finding" {
 				remediation.Enrich(r.Data, r.Technique)
+			}
+			// A result of an approved intrusive test carries who allowed it.
+			if consentNote != nil {
+				if r.Data == nil {
+					r.Data = map[string]any{}
+				}
+				r.Data["consent"] = consentNote
 			}
 			mu.Lock()
 			out.Results = append(out.Results, r)
@@ -226,7 +248,7 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 			snapshot()
 		}
 	})
-	err := mod.Run(runCtx, eng.Scope, allowed, results)
+	err = mod.Run(runCtx, eng.Scope, allowed, results)
 	close(results)
 	collectWG.Wait()
 	// A module may still hold the listener after Run returns (a stray
@@ -265,6 +287,46 @@ type Pool struct {
 	proc     *Processor
 	outcomes OutcomeStore
 	workers  int
+
+	// running holds a cancel func per in-flight job, so Stop can end one job
+	// (the resilience test's "Stop now") without stopping the engagement.
+	mu      sync.Mutex
+	running map[string]context.CancelFunc
+}
+
+// Stop cancels one running job. It reports false when the job is not running
+// on this pool (already finished, or not started yet).
+func (p *Pool) Stop(jobID string) bool {
+	p.mu.Lock()
+	cancel, ok := p.running[jobID]
+	p.mu.Unlock()
+	if ok {
+		cancel()
+	}
+	return ok
+}
+
+// Running reports whether a job is in flight on this pool.
+func (p *Pool) Running(jobID string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, ok := p.running[jobID]
+	return ok
+}
+
+func (p *Pool) track(jobID string, cancel context.CancelFunc) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.running == nil {
+		p.running = make(map[string]context.CancelFunc)
+	}
+	p.running[jobID] = cancel
+}
+
+func (p *Pool) untrack(jobID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.running, jobID)
 }
 
 // NewPool builds a pool of n workers.
@@ -292,7 +354,11 @@ func (p *Pool) Run(ctx context.Context, jobs <-chan queue.Job) {
 					}
 					// Save in-flight snapshots so GetJob can serve live partial
 					// results, then save the final outcome.
-					p.outcomes.Save(p.proc.ProcessWithProgress(ctx, job, p.outcomes.Save))
+					jobCtx, cancel := context.WithCancel(ctx)
+					p.track(job.ID, cancel)
+					p.outcomes.Save(p.proc.ProcessWithProgress(jobCtx, job, p.outcomes.Save))
+					p.untrack(job.ID)
+					cancel()
 				}
 			}
 		}()
@@ -404,4 +470,34 @@ func (s *MemOutcomes) Version(engagementID string) uint64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.versions[engagementID]
+}
+
+// consentData is the record an approved intrusive test's results carry, so a
+// finding shows who allowed it, how and when. Nil below intrusive.
+func consentData(level module.ConsentLevel, approvals []engagement.Approval, reg *module.Registry, mod string) map[string]any {
+	if level < module.LevelIntrusive || len(approvals) == 0 {
+		return nil
+	}
+	a := approvals[0]
+	who := make([]string, 0, len(approvals))
+	seen := map[string]bool{}
+	for _, x := range approvals {
+		if !seen[x.ApprovedBy] {
+			seen[x.ApprovedBy] = true
+			who = append(who, x.ApprovedBy)
+		}
+	}
+	note := map[string]any{
+		"level":      "intrusive",
+		"who":        strings.Join(who, ", "),
+		"at":         a.ApprovedAt.Format(time.RFC3339),
+		"approvalId": a.ID,
+	}
+	if a.How != "" {
+		note["how"] = a.How
+	}
+	if t, ok := technique.Describe(reg, mod); ok {
+		note["action"] = t.Action
+	}
+	return note
 }

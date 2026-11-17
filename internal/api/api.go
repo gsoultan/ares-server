@@ -22,6 +22,7 @@ import (
 	"github.com/gsoultan/ares-server/internal/eta"
 	"github.com/gsoultan/ares-server/internal/queue"
 	"github.com/gsoultan/ares-server/internal/report"
+	"github.com/gsoultan/ares-server/internal/technique"
 	"github.com/gsoultan/ares-server/internal/uuid"
 	"github.com/gsoultan/ares-server/internal/worker"
 	"github.com/gsoultan/ares/detection"
@@ -334,6 +335,18 @@ func (s *Server) dispatchJob(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Actor == "" {
 		body.Actor = "operator"
+	}
+	// The consent gate, as on the control plane. This REST surface takes no
+	// approvals, so an intrusive test is refused here; the worker re-checks.
+	if level := technique.LevelOf(s.reg, body.Module); level > module.LevelSafeProof {
+		if level > eng.TestLevel() {
+			writeError(w, http.StatusForbidden, engagement.ErrAboveIntensity.Error())
+			return
+		}
+		if level >= module.LevelIntrusive {
+			writeError(w, http.StatusForbidden, engagement.ErrNeedsApproval.Error()+"; use the control plane to approve and run it")
+			return
+		}
 	}
 	jobID := uuid.NewV7()
 	if err := s.queue.TryEnqueue(queue.Job{

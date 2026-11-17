@@ -146,6 +146,23 @@ const (
 	// ControlPlaneDispatchAgentJobProcedure is the fully-qualified name of the ControlPlane's
 	// DispatchAgentJob RPC.
 	ControlPlaneDispatchAgentJobProcedure = "/ares.v1.ControlPlane/DispatchAgentJob"
+	// ControlPlaneGetTestConsentProcedure is the fully-qualified name of the ControlPlane's
+	// GetTestConsent RPC.
+	ControlPlaneGetTestConsentProcedure = "/ares.v1.ControlPlane/GetTestConsent"
+	// ControlPlaneSetTestIntensityProcedure is the fully-qualified name of the ControlPlane's
+	// SetTestIntensity RPC.
+	ControlPlaneSetTestIntensityProcedure = "/ares.v1.ControlPlane/SetTestIntensity"
+	// ControlPlaneApproveTechniqueProcedure is the fully-qualified name of the ControlPlane's
+	// ApproveTechnique RPC.
+	ControlPlaneApproveTechniqueProcedure = "/ares.v1.ControlPlane/ApproveTechnique"
+	// ControlPlaneDeclineTechniqueProcedure is the fully-qualified name of the ControlPlane's
+	// DeclineTechnique RPC.
+	ControlPlaneDeclineTechniqueProcedure = "/ares.v1.ControlPlane/DeclineTechnique"
+	// ControlPlaneWithdrawApprovalProcedure is the fully-qualified name of the ControlPlane's
+	// WithdrawApproval RPC.
+	ControlPlaneWithdrawApprovalProcedure = "/ares.v1.ControlPlane/WithdrawApproval"
+	// ControlPlaneStopJobProcedure is the fully-qualified name of the ControlPlane's StopJob RPC.
+	ControlPlaneStopJobProcedure = "/ares.v1.ControlPlane/StopJob"
 )
 
 // ControlPlaneClient is a client for the ares.v1.ControlPlane service.
@@ -237,6 +254,28 @@ type ControlPlaneClient interface {
 	// engagement scope snapshot; the agent re-enforces the scope locally before
 	// touching any target. Results flow back into the same findings pipeline.
 	DispatchAgentJob(context.Context, *connect.Request[v1.DispatchAgentJobRequest]) (*connect.Response[v1.DispatchAgentJobResponse], error)
+	// Test intensity and consent. Each engagement allows tests up to one of the
+	// engine's consent levels: 1 safe proof (default, always on), 2 active
+	// confirmation (per-engagement opt-in), 3 intrusive but recoverable (also
+	// needs a recorded, single-use approval per technique and per target before
+	// each run). There is no level above 3: nothing irreversible can be allowed.
+	//
+	// GetTestConsent returns the engagement's level, the tests above safe proof
+	// with what each does, and the approvals on file.
+	GetTestConsent(context.Context, *connect.Request[v1.GetTestConsentRequest]) (*connect.Response[v1.TestConsent], error)
+	// SetTestIntensity sets the highest level the engagement allows. Lowering it
+	// withdraws unused approvals. Managers only. Audited.
+	SetTestIntensity(context.Context, *connect.Request[v1.SetTestIntensityRequest]) (*connect.Response[v1.TestConsent], error)
+	// ApproveTechnique records a single-use approval for one intrusive test
+	// against one in-scope target. Managers only. Audited.
+	ApproveTechnique(context.Context, *connect.Request[v1.ApproveTechniqueRequest]) (*connect.Response[v1.TechniqueApproval], error)
+	// DeclineTechnique records that an intrusive test was not allowed. Audited.
+	DeclineTechnique(context.Context, *connect.Request[v1.DeclineTechniqueRequest]) (*connect.Response[v1.DeclineTechniqueResponse], error)
+	// WithdrawApproval takes back an approval that has not been used. Audited.
+	WithdrawApproval(context.Context, *connect.Request[v1.WithdrawApprovalRequest]) (*connect.Response[v1.TestConsent], error)
+	// StopJob stops one running test at once (the resilience test's "Stop now")
+	// without stopping the engagement. Audited.
+	StopJob(context.Context, *connect.Request[v1.StopJobRequest]) (*connect.Response[v1.StopJobResponse], error)
 }
 
 // NewControlPlaneClient constructs a client for the ares.v1.ControlPlane service. By default, it
@@ -502,6 +541,42 @@ func NewControlPlaneClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(controlPlaneMethods.ByName("DispatchAgentJob")),
 			connect.WithClientOptions(opts...),
 		),
+		getTestConsent: connect.NewClient[v1.GetTestConsentRequest, v1.TestConsent](
+			httpClient,
+			baseURL+ControlPlaneGetTestConsentProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("GetTestConsent")),
+			connect.WithClientOptions(opts...),
+		),
+		setTestIntensity: connect.NewClient[v1.SetTestIntensityRequest, v1.TestConsent](
+			httpClient,
+			baseURL+ControlPlaneSetTestIntensityProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("SetTestIntensity")),
+			connect.WithClientOptions(opts...),
+		),
+		approveTechnique: connect.NewClient[v1.ApproveTechniqueRequest, v1.TechniqueApproval](
+			httpClient,
+			baseURL+ControlPlaneApproveTechniqueProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("ApproveTechnique")),
+			connect.WithClientOptions(opts...),
+		),
+		declineTechnique: connect.NewClient[v1.DeclineTechniqueRequest, v1.DeclineTechniqueResponse](
+			httpClient,
+			baseURL+ControlPlaneDeclineTechniqueProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("DeclineTechnique")),
+			connect.WithClientOptions(opts...),
+		),
+		withdrawApproval: connect.NewClient[v1.WithdrawApprovalRequest, v1.TestConsent](
+			httpClient,
+			baseURL+ControlPlaneWithdrawApprovalProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("WithdrawApproval")),
+			connect.WithClientOptions(opts...),
+		),
+		stopJob: connect.NewClient[v1.StopJobRequest, v1.StopJobResponse](
+			httpClient,
+			baseURL+ControlPlaneStopJobProcedure,
+			connect.WithSchema(controlPlaneMethods.ByName("StopJob")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -549,6 +624,12 @@ type controlPlaneClient struct {
 	getAgent               *connect.Client[v1.GetAgentRequest, v1.AgentView]
 	removeAgent            *connect.Client[v1.RemoveAgentRequest, v1.RemoveAgentResponse]
 	dispatchAgentJob       *connect.Client[v1.DispatchAgentJobRequest, v1.DispatchAgentJobResponse]
+	getTestConsent         *connect.Client[v1.GetTestConsentRequest, v1.TestConsent]
+	setTestIntensity       *connect.Client[v1.SetTestIntensityRequest, v1.TestConsent]
+	approveTechnique       *connect.Client[v1.ApproveTechniqueRequest, v1.TechniqueApproval]
+	declineTechnique       *connect.Client[v1.DeclineTechniqueRequest, v1.DeclineTechniqueResponse]
+	withdrawApproval       *connect.Client[v1.WithdrawApprovalRequest, v1.TestConsent]
+	stopJob                *connect.Client[v1.StopJobRequest, v1.StopJobResponse]
 }
 
 // ListModules calls ares.v1.ControlPlane.ListModules.
@@ -761,6 +842,36 @@ func (c *controlPlaneClient) DispatchAgentJob(ctx context.Context, req *connect.
 	return c.dispatchAgentJob.CallUnary(ctx, req)
 }
 
+// GetTestConsent calls ares.v1.ControlPlane.GetTestConsent.
+func (c *controlPlaneClient) GetTestConsent(ctx context.Context, req *connect.Request[v1.GetTestConsentRequest]) (*connect.Response[v1.TestConsent], error) {
+	return c.getTestConsent.CallUnary(ctx, req)
+}
+
+// SetTestIntensity calls ares.v1.ControlPlane.SetTestIntensity.
+func (c *controlPlaneClient) SetTestIntensity(ctx context.Context, req *connect.Request[v1.SetTestIntensityRequest]) (*connect.Response[v1.TestConsent], error) {
+	return c.setTestIntensity.CallUnary(ctx, req)
+}
+
+// ApproveTechnique calls ares.v1.ControlPlane.ApproveTechnique.
+func (c *controlPlaneClient) ApproveTechnique(ctx context.Context, req *connect.Request[v1.ApproveTechniqueRequest]) (*connect.Response[v1.TechniqueApproval], error) {
+	return c.approveTechnique.CallUnary(ctx, req)
+}
+
+// DeclineTechnique calls ares.v1.ControlPlane.DeclineTechnique.
+func (c *controlPlaneClient) DeclineTechnique(ctx context.Context, req *connect.Request[v1.DeclineTechniqueRequest]) (*connect.Response[v1.DeclineTechniqueResponse], error) {
+	return c.declineTechnique.CallUnary(ctx, req)
+}
+
+// WithdrawApproval calls ares.v1.ControlPlane.WithdrawApproval.
+func (c *controlPlaneClient) WithdrawApproval(ctx context.Context, req *connect.Request[v1.WithdrawApprovalRequest]) (*connect.Response[v1.TestConsent], error) {
+	return c.withdrawApproval.CallUnary(ctx, req)
+}
+
+// StopJob calls ares.v1.ControlPlane.StopJob.
+func (c *controlPlaneClient) StopJob(ctx context.Context, req *connect.Request[v1.StopJobRequest]) (*connect.Response[v1.StopJobResponse], error) {
+	return c.stopJob.CallUnary(ctx, req)
+}
+
 // ControlPlaneHandler is an implementation of the ares.v1.ControlPlane service.
 type ControlPlaneHandler interface {
 	ListModules(context.Context, *connect.Request[v1.ListModulesRequest]) (*connect.Response[v1.ListModulesResponse], error)
@@ -850,6 +961,28 @@ type ControlPlaneHandler interface {
 	// engagement scope snapshot; the agent re-enforces the scope locally before
 	// touching any target. Results flow back into the same findings pipeline.
 	DispatchAgentJob(context.Context, *connect.Request[v1.DispatchAgentJobRequest]) (*connect.Response[v1.DispatchAgentJobResponse], error)
+	// Test intensity and consent. Each engagement allows tests up to one of the
+	// engine's consent levels: 1 safe proof (default, always on), 2 active
+	// confirmation (per-engagement opt-in), 3 intrusive but recoverable (also
+	// needs a recorded, single-use approval per technique and per target before
+	// each run). There is no level above 3: nothing irreversible can be allowed.
+	//
+	// GetTestConsent returns the engagement's level, the tests above safe proof
+	// with what each does, and the approvals on file.
+	GetTestConsent(context.Context, *connect.Request[v1.GetTestConsentRequest]) (*connect.Response[v1.TestConsent], error)
+	// SetTestIntensity sets the highest level the engagement allows. Lowering it
+	// withdraws unused approvals. Managers only. Audited.
+	SetTestIntensity(context.Context, *connect.Request[v1.SetTestIntensityRequest]) (*connect.Response[v1.TestConsent], error)
+	// ApproveTechnique records a single-use approval for one intrusive test
+	// against one in-scope target. Managers only. Audited.
+	ApproveTechnique(context.Context, *connect.Request[v1.ApproveTechniqueRequest]) (*connect.Response[v1.TechniqueApproval], error)
+	// DeclineTechnique records that an intrusive test was not allowed. Audited.
+	DeclineTechnique(context.Context, *connect.Request[v1.DeclineTechniqueRequest]) (*connect.Response[v1.DeclineTechniqueResponse], error)
+	// WithdrawApproval takes back an approval that has not been used. Audited.
+	WithdrawApproval(context.Context, *connect.Request[v1.WithdrawApprovalRequest]) (*connect.Response[v1.TestConsent], error)
+	// StopJob stops one running test at once (the resilience test's "Stop now")
+	// without stopping the engagement. Audited.
+	StopJob(context.Context, *connect.Request[v1.StopJobRequest]) (*connect.Response[v1.StopJobResponse], error)
 }
 
 // NewControlPlaneHandler builds an HTTP handler from the service implementation. It returns the
@@ -1111,6 +1244,42 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(controlPlaneMethods.ByName("DispatchAgentJob")),
 		connect.WithHandlerOptions(opts...),
 	)
+	controlPlaneGetTestConsentHandler := connect.NewUnaryHandler(
+		ControlPlaneGetTestConsentProcedure,
+		svc.GetTestConsent,
+		connect.WithSchema(controlPlaneMethods.ByName("GetTestConsent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneSetTestIntensityHandler := connect.NewUnaryHandler(
+		ControlPlaneSetTestIntensityProcedure,
+		svc.SetTestIntensity,
+		connect.WithSchema(controlPlaneMethods.ByName("SetTestIntensity")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneApproveTechniqueHandler := connect.NewUnaryHandler(
+		ControlPlaneApproveTechniqueProcedure,
+		svc.ApproveTechnique,
+		connect.WithSchema(controlPlaneMethods.ByName("ApproveTechnique")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneDeclineTechniqueHandler := connect.NewUnaryHandler(
+		ControlPlaneDeclineTechniqueProcedure,
+		svc.DeclineTechnique,
+		connect.WithSchema(controlPlaneMethods.ByName("DeclineTechnique")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneWithdrawApprovalHandler := connect.NewUnaryHandler(
+		ControlPlaneWithdrawApprovalProcedure,
+		svc.WithdrawApproval,
+		connect.WithSchema(controlPlaneMethods.ByName("WithdrawApproval")),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneStopJobHandler := connect.NewUnaryHandler(
+		ControlPlaneStopJobProcedure,
+		svc.StopJob,
+		connect.WithSchema(controlPlaneMethods.ByName("StopJob")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ares.v1.ControlPlane/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ControlPlaneListModulesProcedure:
@@ -1197,6 +1366,18 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 			controlPlaneRemoveAgentHandler.ServeHTTP(w, r)
 		case ControlPlaneDispatchAgentJobProcedure:
 			controlPlaneDispatchAgentJobHandler.ServeHTTP(w, r)
+		case ControlPlaneGetTestConsentProcedure:
+			controlPlaneGetTestConsentHandler.ServeHTTP(w, r)
+		case ControlPlaneSetTestIntensityProcedure:
+			controlPlaneSetTestIntensityHandler.ServeHTTP(w, r)
+		case ControlPlaneApproveTechniqueProcedure:
+			controlPlaneApproveTechniqueHandler.ServeHTTP(w, r)
+		case ControlPlaneDeclineTechniqueProcedure:
+			controlPlaneDeclineTechniqueHandler.ServeHTTP(w, r)
+		case ControlPlaneWithdrawApprovalProcedure:
+			controlPlaneWithdrawApprovalHandler.ServeHTTP(w, r)
+		case ControlPlaneStopJobProcedure:
+			controlPlaneStopJobHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1372,4 +1553,28 @@ func (UnimplementedControlPlaneHandler) RemoveAgent(context.Context, *connect.Re
 
 func (UnimplementedControlPlaneHandler) DispatchAgentJob(context.Context, *connect.Request[v1.DispatchAgentJobRequest]) (*connect.Response[v1.DispatchAgentJobResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.DispatchAgentJob is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) GetTestConsent(context.Context, *connect.Request[v1.GetTestConsentRequest]) (*connect.Response[v1.TestConsent], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.GetTestConsent is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) SetTestIntensity(context.Context, *connect.Request[v1.SetTestIntensityRequest]) (*connect.Response[v1.TestConsent], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.SetTestIntensity is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) ApproveTechnique(context.Context, *connect.Request[v1.ApproveTechniqueRequest]) (*connect.Response[v1.TechniqueApproval], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.ApproveTechnique is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) DeclineTechnique(context.Context, *connect.Request[v1.DeclineTechniqueRequest]) (*connect.Response[v1.DeclineTechniqueResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.DeclineTechnique is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) WithdrawApproval(context.Context, *connect.Request[v1.WithdrawApprovalRequest]) (*connect.Response[v1.TestConsent], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.WithdrawApproval is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) StopJob(context.Context, *connect.Request[v1.StopJobRequest]) (*connect.Response[v1.StopJobResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.StopJob is not implemented"))
 }

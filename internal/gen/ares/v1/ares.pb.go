@@ -6466,6 +6466,820 @@ func (x *DispatchAgentJobResponse) GetTaskId() string {
 	return ""
 }
 
+// TechniqueInfo describes a test above safe proof in the words an approver
+// needs before allowing it.
+type TechniqueInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Module        string                 `protobuf:"bytes,1,opt,name=module,proto3" json:"module,omitempty"`
+	Level         int32                  `protobuf:"varint,2,opt,name=level,proto3" json:"level,omitempty"` // 2 active confirmation, 3 intrusive
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Action        string                 `protobuf:"bytes,4,opt,name=action,proto3" json:"action,omitempty"`          // what it does
+	Risk          string                 `protobuf:"bytes,5,opt,name=risk,proto3" json:"risk,omitempty"`              // what could go wrong
+	Reversible    bool                   `protobuf:"varint,6,opt,name=reversible,proto3" json:"reversible,omitempty"` // its effect ends or is undone
+	Recovery      string                 `protobuf:"bytes,7,opt,name=recovery,proto3" json:"recovery,omitempty"`      // how it is undone
+	Touches       string                 `protobuf:"bytes,8,opt,name=touches,proto3" json:"touches,omitempty"`        // what it touches
+	Limit         string                 `protobuf:"bytes,9,opt,name=limit,proto3" json:"limit,omitempty"`            // the hard limit it never crosses
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TechniqueInfo) Reset() {
+	*x = TechniqueInfo{}
+	mi := &file_ares_v1_ares_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TechniqueInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TechniqueInfo) ProtoMessage() {}
+
+func (x *TechniqueInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TechniqueInfo.ProtoReflect.Descriptor instead.
+func (*TechniqueInfo) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *TechniqueInfo) GetModule() string {
+	if x != nil {
+		return x.Module
+	}
+	return ""
+}
+
+func (x *TechniqueInfo) GetLevel() int32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *TechniqueInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *TechniqueInfo) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *TechniqueInfo) GetRisk() string {
+	if x != nil {
+		return x.Risk
+	}
+	return ""
+}
+
+func (x *TechniqueInfo) GetReversible() bool {
+	if x != nil {
+		return x.Reversible
+	}
+	return false
+}
+
+func (x *TechniqueInfo) GetRecovery() string {
+	if x != nil {
+		return x.Recovery
+	}
+	return ""
+}
+
+func (x *TechniqueInfo) GetTouches() string {
+	if x != nil {
+		return x.Touches
+	}
+	return ""
+}
+
+func (x *TechniqueInfo) GetLimit() string {
+	if x != nil {
+		return x.Limit
+	}
+	return ""
+}
+
+type TechniqueApproval struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Module        string                 `protobuf:"bytes,2,opt,name=module,proto3" json:"module,omitempty"`
+	Target        string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	ApprovedBy    string                 `protobuf:"bytes,4,opt,name=approved_by,json=approvedBy,proto3" json:"approved_by,omitempty"`
+	How           string                 `protobuf:"bytes,5,opt,name=how,proto3" json:"how,omitempty"`
+	Note          string                 `protobuf:"bytes,6,opt,name=note,proto3" json:"note,omitempty"`
+	ApprovedAt    string                 `protobuf:"bytes,7,opt,name=approved_at,json=approvedAt,proto3" json:"approved_at,omitempty"` // RFC3339
+	JobId         string                 `protobuf:"bytes,8,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`                // set once a run used it
+	UsedAt        string                 `protobuf:"bytes,9,opt,name=used_at,json=usedAt,proto3" json:"used_at,omitempty"`             // RFC3339
+	Withdrawn     bool                   `protobuf:"varint,10,opt,name=withdrawn,proto3" json:"withdrawn,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TechniqueApproval) Reset() {
+	*x = TechniqueApproval{}
+	mi := &file_ares_v1_ares_proto_msgTypes[96]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TechniqueApproval) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TechniqueApproval) ProtoMessage() {}
+
+func (x *TechniqueApproval) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[96]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TechniqueApproval.ProtoReflect.Descriptor instead.
+func (*TechniqueApproval) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{96}
+}
+
+func (x *TechniqueApproval) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetModule() string {
+	if x != nil {
+		return x.Module
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetApprovedBy() string {
+	if x != nil {
+		return x.ApprovedBy
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetHow() string {
+	if x != nil {
+		return x.How
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetApprovedAt() string {
+	if x != nil {
+		return x.ApprovedAt
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetUsedAt() string {
+	if x != nil {
+		return x.UsedAt
+	}
+	return ""
+}
+
+func (x *TechniqueApproval) GetWithdrawn() bool {
+	if x != nil {
+		return x.Withdrawn
+	}
+	return false
+}
+
+type TestConsent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Level         int32                  `protobuf:"varint,1,opt,name=level,proto3" json:"level,omitempty"` // 1–3
+	SetBy         string                 `protobuf:"bytes,2,opt,name=set_by,json=setBy,proto3" json:"set_by,omitempty"`
+	SetAt         string                 `protobuf:"bytes,3,opt,name=set_at,json=setAt,proto3" json:"set_at,omitempty"` // RFC3339, empty while the default
+	Techniques    []*TechniqueInfo       `protobuf:"bytes,4,rep,name=techniques,proto3" json:"techniques,omitempty"`
+	Approvals     []*TechniqueApproval   `protobuf:"bytes,5,rep,name=approvals,proto3" json:"approvals,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestConsent) Reset() {
+	*x = TestConsent{}
+	mi := &file_ares_v1_ares_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestConsent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestConsent) ProtoMessage() {}
+
+func (x *TestConsent) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestConsent.ProtoReflect.Descriptor instead.
+func (*TestConsent) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *TestConsent) GetLevel() int32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *TestConsent) GetSetBy() string {
+	if x != nil {
+		return x.SetBy
+	}
+	return ""
+}
+
+func (x *TestConsent) GetSetAt() string {
+	if x != nil {
+		return x.SetAt
+	}
+	return ""
+}
+
+func (x *TestConsent) GetTechniques() []*TechniqueInfo {
+	if x != nil {
+		return x.Techniques
+	}
+	return nil
+}
+
+func (x *TestConsent) GetApprovals() []*TechniqueApproval {
+	if x != nil {
+		return x.Approvals
+	}
+	return nil
+}
+
+type GetTestConsentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EngagementId  string                 `protobuf:"bytes,1,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
+	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTestConsentRequest) Reset() {
+	*x = GetTestConsentRequest{}
+	mi := &file_ares_v1_ares_proto_msgTypes[98]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTestConsentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTestConsentRequest) ProtoMessage() {}
+
+func (x *GetTestConsentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[98]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTestConsentRequest.ProtoReflect.Descriptor instead.
+func (*GetTestConsentRequest) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{98}
+}
+
+func (x *GetTestConsentRequest) GetEngagementId() string {
+	if x != nil {
+		return x.EngagementId
+	}
+	return ""
+}
+
+func (x *GetTestConsentRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+type SetTestIntensityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EngagementId  string                 `protobuf:"bytes,1,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
+	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	Level         int32                  `protobuf:"varint,3,opt,name=level,proto3" json:"level,omitempty"`
+	Actor         string                 `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetTestIntensityRequest) Reset() {
+	*x = SetTestIntensityRequest{}
+	mi := &file_ares_v1_ares_proto_msgTypes[99]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetTestIntensityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetTestIntensityRequest) ProtoMessage() {}
+
+func (x *SetTestIntensityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[99]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetTestIntensityRequest.ProtoReflect.Descriptor instead.
+func (*SetTestIntensityRequest) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{99}
+}
+
+func (x *SetTestIntensityRequest) GetEngagementId() string {
+	if x != nil {
+		return x.EngagementId
+	}
+	return ""
+}
+
+func (x *SetTestIntensityRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *SetTestIntensityRequest) GetLevel() int32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *SetTestIntensityRequest) GetActor() string {
+	if x != nil {
+		return x.Actor
+	}
+	return ""
+}
+
+type ApproveTechniqueRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EngagementId  string                 `protobuf:"bytes,1,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
+	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	Module        string                 `protobuf:"bytes,3,opt,name=module,proto3" json:"module,omitempty"`
+	Target        *Target                `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
+	ApprovedBy    string                 `protobuf:"bytes,5,opt,name=approved_by,json=approvedBy,proto3" json:"approved_by,omitempty"` // the named approver
+	How           string                 `protobuf:"bytes,6,opt,name=how,proto3" json:"how,omitempty"`                                 // how they gave it
+	Note          string                 `protobuf:"bytes,7,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApproveTechniqueRequest) Reset() {
+	*x = ApproveTechniqueRequest{}
+	mi := &file_ares_v1_ares_proto_msgTypes[100]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApproveTechniqueRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApproveTechniqueRequest) ProtoMessage() {}
+
+func (x *ApproveTechniqueRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[100]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApproveTechniqueRequest.ProtoReflect.Descriptor instead.
+func (*ApproveTechniqueRequest) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{100}
+}
+
+func (x *ApproveTechniqueRequest) GetEngagementId() string {
+	if x != nil {
+		return x.EngagementId
+	}
+	return ""
+}
+
+func (x *ApproveTechniqueRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *ApproveTechniqueRequest) GetModule() string {
+	if x != nil {
+		return x.Module
+	}
+	return ""
+}
+
+func (x *ApproveTechniqueRequest) GetTarget() *Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *ApproveTechniqueRequest) GetApprovedBy() string {
+	if x != nil {
+		return x.ApprovedBy
+	}
+	return ""
+}
+
+func (x *ApproveTechniqueRequest) GetHow() string {
+	if x != nil {
+		return x.How
+	}
+	return ""
+}
+
+func (x *ApproveTechniqueRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type DeclineTechniqueRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EngagementId  string                 `protobuf:"bytes,1,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
+	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	Module        string                 `protobuf:"bytes,3,opt,name=module,proto3" json:"module,omitempty"`
+	Target        *Target                `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
+	Actor         string                 `protobuf:"bytes,5,opt,name=actor,proto3" json:"actor,omitempty"`
+	Note          string                 `protobuf:"bytes,6,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeclineTechniqueRequest) Reset() {
+	*x = DeclineTechniqueRequest{}
+	mi := &file_ares_v1_ares_proto_msgTypes[101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclineTechniqueRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclineTechniqueRequest) ProtoMessage() {}
+
+func (x *DeclineTechniqueRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclineTechniqueRequest.ProtoReflect.Descriptor instead.
+func (*DeclineTechniqueRequest) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{101}
+}
+
+func (x *DeclineTechniqueRequest) GetEngagementId() string {
+	if x != nil {
+		return x.EngagementId
+	}
+	return ""
+}
+
+func (x *DeclineTechniqueRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *DeclineTechniqueRequest) GetModule() string {
+	if x != nil {
+		return x.Module
+	}
+	return ""
+}
+
+func (x *DeclineTechniqueRequest) GetTarget() *Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *DeclineTechniqueRequest) GetActor() string {
+	if x != nil {
+		return x.Actor
+	}
+	return ""
+}
+
+func (x *DeclineTechniqueRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type DeclineTechniqueResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeclineTechniqueResponse) Reset() {
+	*x = DeclineTechniqueResponse{}
+	mi := &file_ares_v1_ares_proto_msgTypes[102]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclineTechniqueResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclineTechniqueResponse) ProtoMessage() {}
+
+func (x *DeclineTechniqueResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[102]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclineTechniqueResponse.ProtoReflect.Descriptor instead.
+func (*DeclineTechniqueResponse) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{102}
+}
+
+func (x *DeclineTechniqueResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+type WithdrawApprovalRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EngagementId  string                 `protobuf:"bytes,1,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
+	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	ApprovalId    string                 `protobuf:"bytes,3,opt,name=approval_id,json=approvalId,proto3" json:"approval_id,omitempty"`
+	Actor         string                 `protobuf:"bytes,4,opt,name=actor,proto3" json:"actor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WithdrawApprovalRequest) Reset() {
+	*x = WithdrawApprovalRequest{}
+	mi := &file_ares_v1_ares_proto_msgTypes[103]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WithdrawApprovalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WithdrawApprovalRequest) ProtoMessage() {}
+
+func (x *WithdrawApprovalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[103]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WithdrawApprovalRequest.ProtoReflect.Descriptor instead.
+func (*WithdrawApprovalRequest) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{103}
+}
+
+func (x *WithdrawApprovalRequest) GetEngagementId() string {
+	if x != nil {
+		return x.EngagementId
+	}
+	return ""
+}
+
+func (x *WithdrawApprovalRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *WithdrawApprovalRequest) GetApprovalId() string {
+	if x != nil {
+		return x.ApprovalId
+	}
+	return ""
+}
+
+func (x *WithdrawApprovalRequest) GetActor() string {
+	if x != nil {
+		return x.Actor
+	}
+	return ""
+}
+
+type StopJobRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Actor         string                 `protobuf:"bytes,3,opt,name=actor,proto3" json:"actor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopJobRequest) Reset() {
+	*x = StopJobRequest{}
+	mi := &file_ares_v1_ares_proto_msgTypes[104]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopJobRequest) ProtoMessage() {}
+
+func (x *StopJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[104]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopJobRequest.ProtoReflect.Descriptor instead.
+func (*StopJobRequest) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{104}
+}
+
+func (x *StopJobRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *StopJobRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *StopJobRequest) GetActor() string {
+	if x != nil {
+		return x.Actor
+	}
+	return ""
+}
+
+type StopJobResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Stopped       bool                   `protobuf:"varint,1,opt,name=stopped,proto3" json:"stopped,omitempty"` // false when the test had already finished
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopJobResponse) Reset() {
+	*x = StopJobResponse{}
+	mi := &file_ares_v1_ares_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopJobResponse) ProtoMessage() {}
+
+func (x *StopJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ares_v1_ares_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopJobResponse.ProtoReflect.Descriptor instead.
+func (*StopJobResponse) Descriptor() ([]byte, []int) {
+	return file_ares_v1_ares_proto_rawDescGZIP(), []int{105}
+}
+
+func (x *StopJobResponse) GetStopped() bool {
+	if x != nil {
+		return x.Stopped
+	}
+	return false
+}
+
 var File_ares_v1_ares_proto protoreflect.FileDescriptor
 
 const file_ares_v1_ares_proto_rawDesc = "" +
@@ -6985,13 +7799,85 @@ const file_ares_v1_ares_proto_rawDesc = "" +
 	"\x06module\x18\x04 \x01(\tR\x06module\x12)\n" +
 	"\atargets\x18\x05 \x03(\v2\x0f.ares.v1.TargetR\atargets\"3\n" +
 	"\x18DispatchAgentJobResponse\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId*\xa2\x01\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\xe9\x01\n" +
+	"\rTechniqueInfo\x12\x16\n" +
+	"\x06module\x18\x01 \x01(\tR\x06module\x12\x14\n" +
+	"\x05level\x18\x02 \x01(\x05R\x05level\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x16\n" +
+	"\x06action\x18\x04 \x01(\tR\x06action\x12\x12\n" +
+	"\x04risk\x18\x05 \x01(\tR\x04risk\x12\x1e\n" +
+	"\n" +
+	"reversible\x18\x06 \x01(\bR\n" +
+	"reversible\x12\x1a\n" +
+	"\brecovery\x18\a \x01(\tR\brecovery\x12\x18\n" +
+	"\atouches\x18\b \x01(\tR\atouches\x12\x14\n" +
+	"\x05limit\x18\t \x01(\tR\x05limit\"\x89\x02\n" +
+	"\x11TechniqueApproval\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06module\x18\x02 \x01(\tR\x06module\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x12\x1f\n" +
+	"\vapproved_by\x18\x04 \x01(\tR\n" +
+	"approvedBy\x12\x10\n" +
+	"\x03how\x18\x05 \x01(\tR\x03how\x12\x12\n" +
+	"\x04note\x18\x06 \x01(\tR\x04note\x12\x1f\n" +
+	"\vapproved_at\x18\a \x01(\tR\n" +
+	"approvedAt\x12\x15\n" +
+	"\x06job_id\x18\b \x01(\tR\x05jobId\x12\x17\n" +
+	"\aused_at\x18\t \x01(\tR\x06usedAt\x12\x1c\n" +
+	"\twithdrawn\x18\n" +
+	" \x01(\bR\twithdrawn\"\xc3\x01\n" +
+	"\vTestConsent\x12\x14\n" +
+	"\x05level\x18\x01 \x01(\x05R\x05level\x12\x15\n" +
+	"\x06set_by\x18\x02 \x01(\tR\x05setBy\x12\x15\n" +
+	"\x06set_at\x18\x03 \x01(\tR\x05setAt\x126\n" +
+	"\n" +
+	"techniques\x18\x04 \x03(\v2\x16.ares.v1.TechniqueInfoR\n" +
+	"techniques\x128\n" +
+	"\tapprovals\x18\x05 \x03(\v2\x1a.ares.v1.TechniqueApprovalR\tapprovals\"Y\n" +
+	"\x15GetTestConsentRequest\x12#\n" +
+	"\rengagement_id\x18\x01 \x01(\tR\fengagementId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\"\x87\x01\n" +
+	"\x17SetTestIntensityRequest\x12#\n" +
+	"\rengagement_id\x18\x01 \x01(\tR\fengagementId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x14\n" +
+	"\x05level\x18\x03 \x01(\x05R\x05level\x12\x14\n" +
+	"\x05actor\x18\x04 \x01(\tR\x05actor\"\xe3\x01\n" +
+	"\x17ApproveTechniqueRequest\x12#\n" +
+	"\rengagement_id\x18\x01 \x01(\tR\fengagementId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x16\n" +
+	"\x06module\x18\x03 \x01(\tR\x06module\x12'\n" +
+	"\x06target\x18\x04 \x01(\v2\x0f.ares.v1.TargetR\x06target\x12\x1f\n" +
+	"\vapproved_by\x18\x05 \x01(\tR\n" +
+	"approvedBy\x12\x10\n" +
+	"\x03how\x18\x06 \x01(\tR\x03how\x12\x12\n" +
+	"\x04note\x18\a \x01(\tR\x04note\"\xc6\x01\n" +
+	"\x17DeclineTechniqueRequest\x12#\n" +
+	"\rengagement_id\x18\x01 \x01(\tR\fengagementId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x16\n" +
+	"\x06module\x18\x03 \x01(\tR\x06module\x12'\n" +
+	"\x06target\x18\x04 \x01(\v2\x0f.ares.v1.TargetR\x06target\x12\x14\n" +
+	"\x05actor\x18\x05 \x01(\tR\x05actor\x12\x12\n" +
+	"\x04note\x18\x06 \x01(\tR\x04note\"*\n" +
+	"\x18DeclineTechniqueResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x92\x01\n" +
+	"\x17WithdrawApprovalRequest\x12#\n" +
+	"\rengagement_id\x18\x01 \x01(\tR\fengagementId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x1f\n" +
+	"\vapproval_id\x18\x03 \x01(\tR\n" +
+	"approvalId\x12\x14\n" +
+	"\x05actor\x18\x04 \x01(\tR\x05actor\"Z\n" +
+	"\x0eStopJobRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x15\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x14\n" +
+	"\x05actor\x18\x03 \x01(\tR\x05actor\"+\n" +
+	"\x0fStopJobResponse\x12\x18\n" +
+	"\astopped\x18\x01 \x01(\bR\astopped*\xa2\x01\n" +
 	"\vAgentStatus\x12\x1c\n" +
 	"\x18AGENT_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16AGENT_STATUS_CONNECTED\x10\x01\x12\x1e\n" +
 	"\x1aAGENT_STATUS_RUNNING_CHECK\x10\x02\x12\x1f\n" +
 	"\x1bAGENT_STATUS_NOT_HEARD_FROM\x10\x03\x12\x18\n" +
-	"\x14AGENT_STATUS_REMOVED\x10\x042\xdc\x17\n" +
+	"\x14AGENT_STATUS_REMOVED\x10\x042\xa5\x1b\n" +
 	"\fControlPlane\x12H\n" +
 	"\vListModules\x12\x1b.ares.v1.ListModulesRequest\x1a\x1c.ares.v1.ListModulesResponse\x12=\n" +
 	"\fCreateTenant\x12\x1c.ares.v1.CreateTenantRequest\x1a\x0f.ares.v1.Tenant\x12H\n" +
@@ -7036,7 +7922,13 @@ const file_ares_v1_ares_proto_rawDesc = "" +
 	"ListAgents\x12\x1a.ares.v1.ListAgentsRequest\x1a\x1b.ares.v1.ListAgentsResponse\x128\n" +
 	"\bGetAgent\x12\x18.ares.v1.GetAgentRequest\x1a\x12.ares.v1.AgentView\x12H\n" +
 	"\vRemoveAgent\x12\x1b.ares.v1.RemoveAgentRequest\x1a\x1c.ares.v1.RemoveAgentResponse\x12W\n" +
-	"\x10DispatchAgentJob\x12 .ares.v1.DispatchAgentJobRequest\x1a!.ares.v1.DispatchAgentJobResponseB\x92\x01\n" +
+	"\x10DispatchAgentJob\x12 .ares.v1.DispatchAgentJobRequest\x1a!.ares.v1.DispatchAgentJobResponse\x12F\n" +
+	"\x0eGetTestConsent\x12\x1e.ares.v1.GetTestConsentRequest\x1a\x14.ares.v1.TestConsent\x12J\n" +
+	"\x10SetTestIntensity\x12 .ares.v1.SetTestIntensityRequest\x1a\x14.ares.v1.TestConsent\x12P\n" +
+	"\x10ApproveTechnique\x12 .ares.v1.ApproveTechniqueRequest\x1a\x1a.ares.v1.TechniqueApproval\x12W\n" +
+	"\x10DeclineTechnique\x12 .ares.v1.DeclineTechniqueRequest\x1a!.ares.v1.DeclineTechniqueResponse\x12J\n" +
+	"\x10WithdrawApproval\x12 .ares.v1.WithdrawApprovalRequest\x1a\x14.ares.v1.TestConsent\x12<\n" +
+	"\aStopJob\x12\x17.ares.v1.StopJobRequest\x1a\x18.ares.v1.StopJobResponseB\x92\x01\n" +
 	"\vcom.ares.v1B\tAresProtoP\x01Z;github.com/gsoultan/ares-server/internal/gen/ares/v1;aresv1\xa2\x02\x03AXX\xaa\x02\aAres.V1\xca\x02\aAres\\V1\xe2\x02\x13Ares\\V1\\GPBMetadata\xea\x02\bAres::V1b\x06proto3"
 
 var (
@@ -7052,7 +7944,7 @@ func file_ares_v1_ares_proto_rawDescGZIP() []byte {
 }
 
 var file_ares_v1_ares_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_ares_v1_ares_proto_msgTypes = make([]protoimpl.MessageInfo, 97)
+var file_ares_v1_ares_proto_msgTypes = make([]protoimpl.MessageInfo, 108)
 var file_ares_v1_ares_proto_goTypes = []any{
 	(AgentStatus)(0),                       // 0: ares.v1.AgentStatus
 	(*AdviseRequest)(nil),                  // 1: ares.v1.AdviseRequest
@@ -7150,11 +8042,22 @@ var file_ares_v1_ares_proto_goTypes = []any{
 	(*RemoveAgentResponse)(nil),            // 93: ares.v1.RemoveAgentResponse
 	(*DispatchAgentJobRequest)(nil),        // 94: ares.v1.DispatchAgentJobRequest
 	(*DispatchAgentJobResponse)(nil),       // 95: ares.v1.DispatchAgentJobResponse
-	nil,                                    // 96: ares.v1.DetectionSummary.CountsEntry
-	nil,                                    // 97: ares.v1.PurpleCoverage.CountsEntry
-	(*structpb.Struct)(nil),                // 98: google.protobuf.Struct
-	(*Consent)(nil),                        // 99: ares.v1.Consent
-	(*HostFacts)(nil),                      // 100: ares.v1.HostFacts
+	(*TechniqueInfo)(nil),                  // 96: ares.v1.TechniqueInfo
+	(*TechniqueApproval)(nil),              // 97: ares.v1.TechniqueApproval
+	(*TestConsent)(nil),                    // 98: ares.v1.TestConsent
+	(*GetTestConsentRequest)(nil),          // 99: ares.v1.GetTestConsentRequest
+	(*SetTestIntensityRequest)(nil),        // 100: ares.v1.SetTestIntensityRequest
+	(*ApproveTechniqueRequest)(nil),        // 101: ares.v1.ApproveTechniqueRequest
+	(*DeclineTechniqueRequest)(nil),        // 102: ares.v1.DeclineTechniqueRequest
+	(*DeclineTechniqueResponse)(nil),       // 103: ares.v1.DeclineTechniqueResponse
+	(*WithdrawApprovalRequest)(nil),        // 104: ares.v1.WithdrawApprovalRequest
+	(*StopJobRequest)(nil),                 // 105: ares.v1.StopJobRequest
+	(*StopJobResponse)(nil),                // 106: ares.v1.StopJobResponse
+	nil,                                    // 107: ares.v1.DetectionSummary.CountsEntry
+	nil,                                    // 108: ares.v1.PurpleCoverage.CountsEntry
+	(*structpb.Struct)(nil),                // 109: google.protobuf.Struct
+	(*Consent)(nil),                        // 110: ares.v1.Consent
+	(*HostFacts)(nil),                      // 111: ares.v1.HostFacts
 }
 var file_ares_v1_ares_proto_depIdxs = []int32{
 	3,   // 0: ares.v1.SettingsView.ai:type_name -> ares.v1.AISettings
@@ -7172,124 +8075,140 @@ var file_ares_v1_ares_proto_depIdxs = []int32{
 	32,  // 12: ares.v1.SetScopeRequest.window:type_name -> ares.v1.Window
 	31,  // 13: ares.v1.Denial.target:type_name -> ares.v1.Target
 	31,  // 14: ares.v1.Result.target:type_name -> ares.v1.Target
-	98,  // 15: ares.v1.Result.data:type_name -> google.protobuf.Struct
+	109, // 15: ares.v1.Result.data:type_name -> google.protobuf.Struct
 	31,  // 16: ares.v1.DispatchJobRequest.targets:type_name -> ares.v1.Target
-	98,  // 17: ares.v1.DispatchJobRequest.params:type_name -> google.protobuf.Struct
+	109, // 17: ares.v1.DispatchJobRequest.params:type_name -> google.protobuf.Struct
 	31,  // 18: ares.v1.JobOutcome.allowed:type_name -> ares.v1.Target
 	47,  // 19: ares.v1.JobOutcome.denied:type_name -> ares.v1.Denial
 	48,  // 20: ares.v1.JobOutcome.results:type_name -> ares.v1.Result
 	53,  // 21: ares.v1.JobOutcome.progress:type_name -> ares.v1.JobProgress
 	53,  // 22: ares.v1.JobSummary.progress:type_name -> ares.v1.JobProgress
 	55,  // 23: ares.v1.ListJobsResponse.jobs:type_name -> ares.v1.JobSummary
-	98,  // 24: ares.v1.Finding.data:type_name -> google.protobuf.Struct
+	109, // 24: ares.v1.Finding.data:type_name -> google.protobuf.Struct
 	57,  // 25: ares.v1.ListFindingsResponse.findings:type_name -> ares.v1.Finding
 	61,  // 26: ares.v1.GetAuditResponse.entries:type_name -> ares.v1.AuditEntry
 	66,  // 27: ares.v1.DetectionSummary.techniques:type_name -> ares.v1.TechniqueStatus
-	96,  // 28: ares.v1.DetectionSummary.counts:type_name -> ares.v1.DetectionSummary.CountsEntry
+	107, // 28: ares.v1.DetectionSummary.counts:type_name -> ares.v1.DetectionSummary.CountsEntry
 	69,  // 29: ares.v1.AttackPath.steps:type_name -> ares.v1.PathStep
 	70,  // 30: ares.v1.RiskPicture.paths:type_name -> ares.v1.AttackPath
-	97,  // 31: ares.v1.PurpleCoverage.counts:type_name -> ares.v1.PurpleCoverage.CountsEntry
+	108, // 31: ares.v1.PurpleCoverage.counts:type_name -> ares.v1.PurpleCoverage.CountsEntry
 	74,  // 32: ares.v1.PurpleTemplateSummary.coverage:type_name -> ares.v1.PurpleCoverage
 	75,  // 33: ares.v1.PurpleTemplate.steps:type_name -> ares.v1.PurpleStep
 	74,  // 34: ares.v1.PurpleTemplate.coverage:type_name -> ares.v1.PurpleCoverage
 	76,  // 35: ares.v1.ListPurpleTemplatesResponse.templates:type_name -> ares.v1.PurpleTemplateSummary
-	99,  // 36: ares.v1.MintAgentKeyRequest.consent:type_name -> ares.v1.Consent
-	99,  // 37: ares.v1.AgentKeyView.consent:type_name -> ares.v1.Consent
+	110, // 36: ares.v1.MintAgentKeyRequest.consent:type_name -> ares.v1.Consent
+	110, // 37: ares.v1.AgentKeyView.consent:type_name -> ares.v1.Consent
 	86,  // 38: ares.v1.ListAgentKeysResponse.keys:type_name -> ares.v1.AgentKeyView
 	0,   // 39: ares.v1.AgentView.status:type_name -> ares.v1.AgentStatus
-	100, // 40: ares.v1.AgentView.host:type_name -> ares.v1.HostFacts
-	99,  // 41: ares.v1.AgentView.consent:type_name -> ares.v1.Consent
+	111, // 40: ares.v1.AgentView.host:type_name -> ares.v1.HostFacts
+	110, // 41: ares.v1.AgentView.consent:type_name -> ares.v1.Consent
 	89,  // 42: ares.v1.ListAgentsResponse.agents:type_name -> ares.v1.AgentView
 	31,  // 43: ares.v1.DispatchAgentJobRequest.targets:type_name -> ares.v1.Target
-	35,  // 44: ares.v1.ControlPlane.ListModules:input_type -> ares.v1.ListModulesRequest
-	37,  // 45: ares.v1.ControlPlane.CreateTenant:input_type -> ares.v1.CreateTenantRequest
-	38,  // 46: ares.v1.ControlPlane.ListTenants:input_type -> ares.v1.ListTenantsRequest
-	40,  // 47: ares.v1.ControlPlane.CreateEngagement:input_type -> ares.v1.CreateEngagementRequest
-	41,  // 48: ares.v1.ControlPlane.ListEngagements:input_type -> ares.v1.ListEngagementsRequest
-	43,  // 49: ares.v1.ControlPlane.GetEngagement:input_type -> ares.v1.GetEngagementRequest
-	44,  // 50: ares.v1.ControlPlane.SetScope:input_type -> ares.v1.SetScopeRequest
-	45,  // 51: ares.v1.ControlPlane.Authorize:input_type -> ares.v1.AuthorizeRequest
-	46,  // 52: ares.v1.ControlPlane.Halt:input_type -> ares.v1.HaltRequest
-	49,  // 53: ares.v1.ControlPlane.DispatchJob:input_type -> ares.v1.DispatchJobRequest
-	51,  // 54: ares.v1.ControlPlane.GetJob:input_type -> ares.v1.GetJobRequest
-	54,  // 55: ares.v1.ControlPlane.ListJobs:input_type -> ares.v1.ListJobsRequest
-	58,  // 56: ares.v1.ControlPlane.ListFindings:input_type -> ares.v1.ListFindingsRequest
-	60,  // 57: ares.v1.ControlPlane.SetFindingStatus:input_type -> ares.v1.SetFindingStatusRequest
-	62,  // 58: ares.v1.ControlPlane.GetAudit:input_type -> ares.v1.GetAuditRequest
-	63,  // 59: ares.v1.ControlPlane.GenerateReport:input_type -> ares.v1.GenerateReportRequest
-	68,  // 60: ares.v1.ControlPlane.GetDetectionSummary:input_type -> ares.v1.GetDetectionSummaryRequest
-	73,  // 61: ares.v1.ControlPlane.SetDetection:input_type -> ares.v1.SetDetectionRequest
-	72,  // 62: ares.v1.ControlPlane.GetRiskPicture:input_type -> ares.v1.GetRiskPictureRequest
-	78,  // 63: ares.v1.ControlPlane.ListPurpleTemplates:input_type -> ares.v1.ListPurpleTemplatesRequest
-	80,  // 64: ares.v1.ControlPlane.GetPurpleTemplate:input_type -> ares.v1.GetPurpleTemplateRequest
-	1,   // 65: ares.v1.ControlPlane.Advise:input_type -> ares.v1.AdviseRequest
-	6,   // 66: ares.v1.ControlPlane.GetSettings:input_type -> ares.v1.GetSettingsRequest
-	8,   // 67: ares.v1.ControlPlane.UpdateSettings:input_type -> ares.v1.UpdateSettingsRequest
-	9,   // 68: ares.v1.ControlPlane.TestAIProvider:input_type -> ares.v1.TestAIProviderRequest
-	12,  // 69: ares.v1.ControlPlane.GetSetupStatus:input_type -> ares.v1.GetSetupStatusRequest
-	14,  // 70: ares.v1.ControlPlane.TestDatabaseConnection:input_type -> ares.v1.TestDatabaseConnectionRequest
-	17,  // 71: ares.v1.ControlPlane.CommitSetup:input_type -> ares.v1.CommitSetupRequest
-	20,  // 72: ares.v1.ControlPlane.Login:input_type -> ares.v1.LoginRequest
-	22,  // 73: ares.v1.ControlPlane.Logout:input_type -> ares.v1.LogoutRequest
-	24,  // 74: ares.v1.ControlPlane.CurrentUser:input_type -> ares.v1.CurrentUserRequest
-	25,  // 75: ares.v1.ControlPlane.ListUsers:input_type -> ares.v1.ListUsersRequest
-	27,  // 76: ares.v1.ControlPlane.CreateUser:input_type -> ares.v1.CreateUserRequest
-	28,  // 77: ares.v1.ControlPlane.SetUserRole:input_type -> ares.v1.SetUserRoleRequest
-	29,  // 78: ares.v1.ControlPlane.SetUserDisabled:input_type -> ares.v1.SetUserDisabledRequest
-	81,  // 79: ares.v1.ControlPlane.MintAgentKey:input_type -> ares.v1.MintAgentKeyRequest
-	83,  // 80: ares.v1.ControlPlane.CancelAgentKey:input_type -> ares.v1.CancelAgentKeyRequest
-	85,  // 81: ares.v1.ControlPlane.ListAgentKeys:input_type -> ares.v1.ListAgentKeysRequest
-	88,  // 82: ares.v1.ControlPlane.ListAgents:input_type -> ares.v1.ListAgentsRequest
-	91,  // 83: ares.v1.ControlPlane.GetAgent:input_type -> ares.v1.GetAgentRequest
-	92,  // 84: ares.v1.ControlPlane.RemoveAgent:input_type -> ares.v1.RemoveAgentRequest
-	94,  // 85: ares.v1.ControlPlane.DispatchAgentJob:input_type -> ares.v1.DispatchAgentJobRequest
-	36,  // 86: ares.v1.ControlPlane.ListModules:output_type -> ares.v1.ListModulesResponse
-	30,  // 87: ares.v1.ControlPlane.CreateTenant:output_type -> ares.v1.Tenant
-	39,  // 88: ares.v1.ControlPlane.ListTenants:output_type -> ares.v1.ListTenantsResponse
-	34,  // 89: ares.v1.ControlPlane.CreateEngagement:output_type -> ares.v1.Engagement
-	42,  // 90: ares.v1.ControlPlane.ListEngagements:output_type -> ares.v1.ListEngagementsResponse
-	34,  // 91: ares.v1.ControlPlane.GetEngagement:output_type -> ares.v1.Engagement
-	34,  // 92: ares.v1.ControlPlane.SetScope:output_type -> ares.v1.Engagement
-	34,  // 93: ares.v1.ControlPlane.Authorize:output_type -> ares.v1.Engagement
-	34,  // 94: ares.v1.ControlPlane.Halt:output_type -> ares.v1.Engagement
-	50,  // 95: ares.v1.ControlPlane.DispatchJob:output_type -> ares.v1.DispatchJobResponse
-	52,  // 96: ares.v1.ControlPlane.GetJob:output_type -> ares.v1.JobOutcome
-	56,  // 97: ares.v1.ControlPlane.ListJobs:output_type -> ares.v1.ListJobsResponse
-	59,  // 98: ares.v1.ControlPlane.ListFindings:output_type -> ares.v1.ListFindingsResponse
-	57,  // 99: ares.v1.ControlPlane.SetFindingStatus:output_type -> ares.v1.Finding
-	65,  // 100: ares.v1.ControlPlane.GetAudit:output_type -> ares.v1.GetAuditResponse
-	64,  // 101: ares.v1.ControlPlane.GenerateReport:output_type -> ares.v1.GenerateReportResponse
-	67,  // 102: ares.v1.ControlPlane.GetDetectionSummary:output_type -> ares.v1.DetectionSummary
-	67,  // 103: ares.v1.ControlPlane.SetDetection:output_type -> ares.v1.DetectionSummary
-	71,  // 104: ares.v1.ControlPlane.GetRiskPicture:output_type -> ares.v1.RiskPicture
-	79,  // 105: ares.v1.ControlPlane.ListPurpleTemplates:output_type -> ares.v1.ListPurpleTemplatesResponse
-	77,  // 106: ares.v1.ControlPlane.GetPurpleTemplate:output_type -> ares.v1.PurpleTemplate
-	2,   // 107: ares.v1.ControlPlane.Advise:output_type -> ares.v1.AdviseResponse
-	5,   // 108: ares.v1.ControlPlane.GetSettings:output_type -> ares.v1.SettingsView
-	5,   // 109: ares.v1.ControlPlane.UpdateSettings:output_type -> ares.v1.SettingsView
-	10,  // 110: ares.v1.ControlPlane.TestAIProvider:output_type -> ares.v1.TestAIProviderResponse
-	13,  // 111: ares.v1.ControlPlane.GetSetupStatus:output_type -> ares.v1.SetupStatus
-	15,  // 112: ares.v1.ControlPlane.TestDatabaseConnection:output_type -> ares.v1.TestDatabaseConnectionResponse
-	18,  // 113: ares.v1.ControlPlane.CommitSetup:output_type -> ares.v1.CommitSetupResponse
-	21,  // 114: ares.v1.ControlPlane.Login:output_type -> ares.v1.LoginResponse
-	23,  // 115: ares.v1.ControlPlane.Logout:output_type -> ares.v1.LogoutResponse
-	19,  // 116: ares.v1.ControlPlane.CurrentUser:output_type -> ares.v1.UserInfo
-	26,  // 117: ares.v1.ControlPlane.ListUsers:output_type -> ares.v1.ListUsersResponse
-	19,  // 118: ares.v1.ControlPlane.CreateUser:output_type -> ares.v1.UserInfo
-	19,  // 119: ares.v1.ControlPlane.SetUserRole:output_type -> ares.v1.UserInfo
-	19,  // 120: ares.v1.ControlPlane.SetUserDisabled:output_type -> ares.v1.UserInfo
-	82,  // 121: ares.v1.ControlPlane.MintAgentKey:output_type -> ares.v1.MintAgentKeyResponse
-	84,  // 122: ares.v1.ControlPlane.CancelAgentKey:output_type -> ares.v1.CancelAgentKeyResponse
-	87,  // 123: ares.v1.ControlPlane.ListAgentKeys:output_type -> ares.v1.ListAgentKeysResponse
-	90,  // 124: ares.v1.ControlPlane.ListAgents:output_type -> ares.v1.ListAgentsResponse
-	89,  // 125: ares.v1.ControlPlane.GetAgent:output_type -> ares.v1.AgentView
-	93,  // 126: ares.v1.ControlPlane.RemoveAgent:output_type -> ares.v1.RemoveAgentResponse
-	95,  // 127: ares.v1.ControlPlane.DispatchAgentJob:output_type -> ares.v1.DispatchAgentJobResponse
-	86,  // [86:128] is the sub-list for method output_type
-	44,  // [44:86] is the sub-list for method input_type
-	44,  // [44:44] is the sub-list for extension type_name
-	44,  // [44:44] is the sub-list for extension extendee
-	0,   // [0:44] is the sub-list for field type_name
+	96,  // 44: ares.v1.TestConsent.techniques:type_name -> ares.v1.TechniqueInfo
+	97,  // 45: ares.v1.TestConsent.approvals:type_name -> ares.v1.TechniqueApproval
+	31,  // 46: ares.v1.ApproveTechniqueRequest.target:type_name -> ares.v1.Target
+	31,  // 47: ares.v1.DeclineTechniqueRequest.target:type_name -> ares.v1.Target
+	35,  // 48: ares.v1.ControlPlane.ListModules:input_type -> ares.v1.ListModulesRequest
+	37,  // 49: ares.v1.ControlPlane.CreateTenant:input_type -> ares.v1.CreateTenantRequest
+	38,  // 50: ares.v1.ControlPlane.ListTenants:input_type -> ares.v1.ListTenantsRequest
+	40,  // 51: ares.v1.ControlPlane.CreateEngagement:input_type -> ares.v1.CreateEngagementRequest
+	41,  // 52: ares.v1.ControlPlane.ListEngagements:input_type -> ares.v1.ListEngagementsRequest
+	43,  // 53: ares.v1.ControlPlane.GetEngagement:input_type -> ares.v1.GetEngagementRequest
+	44,  // 54: ares.v1.ControlPlane.SetScope:input_type -> ares.v1.SetScopeRequest
+	45,  // 55: ares.v1.ControlPlane.Authorize:input_type -> ares.v1.AuthorizeRequest
+	46,  // 56: ares.v1.ControlPlane.Halt:input_type -> ares.v1.HaltRequest
+	49,  // 57: ares.v1.ControlPlane.DispatchJob:input_type -> ares.v1.DispatchJobRequest
+	51,  // 58: ares.v1.ControlPlane.GetJob:input_type -> ares.v1.GetJobRequest
+	54,  // 59: ares.v1.ControlPlane.ListJobs:input_type -> ares.v1.ListJobsRequest
+	58,  // 60: ares.v1.ControlPlane.ListFindings:input_type -> ares.v1.ListFindingsRequest
+	60,  // 61: ares.v1.ControlPlane.SetFindingStatus:input_type -> ares.v1.SetFindingStatusRequest
+	62,  // 62: ares.v1.ControlPlane.GetAudit:input_type -> ares.v1.GetAuditRequest
+	63,  // 63: ares.v1.ControlPlane.GenerateReport:input_type -> ares.v1.GenerateReportRequest
+	68,  // 64: ares.v1.ControlPlane.GetDetectionSummary:input_type -> ares.v1.GetDetectionSummaryRequest
+	73,  // 65: ares.v1.ControlPlane.SetDetection:input_type -> ares.v1.SetDetectionRequest
+	72,  // 66: ares.v1.ControlPlane.GetRiskPicture:input_type -> ares.v1.GetRiskPictureRequest
+	78,  // 67: ares.v1.ControlPlane.ListPurpleTemplates:input_type -> ares.v1.ListPurpleTemplatesRequest
+	80,  // 68: ares.v1.ControlPlane.GetPurpleTemplate:input_type -> ares.v1.GetPurpleTemplateRequest
+	1,   // 69: ares.v1.ControlPlane.Advise:input_type -> ares.v1.AdviseRequest
+	6,   // 70: ares.v1.ControlPlane.GetSettings:input_type -> ares.v1.GetSettingsRequest
+	8,   // 71: ares.v1.ControlPlane.UpdateSettings:input_type -> ares.v1.UpdateSettingsRequest
+	9,   // 72: ares.v1.ControlPlane.TestAIProvider:input_type -> ares.v1.TestAIProviderRequest
+	12,  // 73: ares.v1.ControlPlane.GetSetupStatus:input_type -> ares.v1.GetSetupStatusRequest
+	14,  // 74: ares.v1.ControlPlane.TestDatabaseConnection:input_type -> ares.v1.TestDatabaseConnectionRequest
+	17,  // 75: ares.v1.ControlPlane.CommitSetup:input_type -> ares.v1.CommitSetupRequest
+	20,  // 76: ares.v1.ControlPlane.Login:input_type -> ares.v1.LoginRequest
+	22,  // 77: ares.v1.ControlPlane.Logout:input_type -> ares.v1.LogoutRequest
+	24,  // 78: ares.v1.ControlPlane.CurrentUser:input_type -> ares.v1.CurrentUserRequest
+	25,  // 79: ares.v1.ControlPlane.ListUsers:input_type -> ares.v1.ListUsersRequest
+	27,  // 80: ares.v1.ControlPlane.CreateUser:input_type -> ares.v1.CreateUserRequest
+	28,  // 81: ares.v1.ControlPlane.SetUserRole:input_type -> ares.v1.SetUserRoleRequest
+	29,  // 82: ares.v1.ControlPlane.SetUserDisabled:input_type -> ares.v1.SetUserDisabledRequest
+	81,  // 83: ares.v1.ControlPlane.MintAgentKey:input_type -> ares.v1.MintAgentKeyRequest
+	83,  // 84: ares.v1.ControlPlane.CancelAgentKey:input_type -> ares.v1.CancelAgentKeyRequest
+	85,  // 85: ares.v1.ControlPlane.ListAgentKeys:input_type -> ares.v1.ListAgentKeysRequest
+	88,  // 86: ares.v1.ControlPlane.ListAgents:input_type -> ares.v1.ListAgentsRequest
+	91,  // 87: ares.v1.ControlPlane.GetAgent:input_type -> ares.v1.GetAgentRequest
+	92,  // 88: ares.v1.ControlPlane.RemoveAgent:input_type -> ares.v1.RemoveAgentRequest
+	94,  // 89: ares.v1.ControlPlane.DispatchAgentJob:input_type -> ares.v1.DispatchAgentJobRequest
+	99,  // 90: ares.v1.ControlPlane.GetTestConsent:input_type -> ares.v1.GetTestConsentRequest
+	100, // 91: ares.v1.ControlPlane.SetTestIntensity:input_type -> ares.v1.SetTestIntensityRequest
+	101, // 92: ares.v1.ControlPlane.ApproveTechnique:input_type -> ares.v1.ApproveTechniqueRequest
+	102, // 93: ares.v1.ControlPlane.DeclineTechnique:input_type -> ares.v1.DeclineTechniqueRequest
+	104, // 94: ares.v1.ControlPlane.WithdrawApproval:input_type -> ares.v1.WithdrawApprovalRequest
+	105, // 95: ares.v1.ControlPlane.StopJob:input_type -> ares.v1.StopJobRequest
+	36,  // 96: ares.v1.ControlPlane.ListModules:output_type -> ares.v1.ListModulesResponse
+	30,  // 97: ares.v1.ControlPlane.CreateTenant:output_type -> ares.v1.Tenant
+	39,  // 98: ares.v1.ControlPlane.ListTenants:output_type -> ares.v1.ListTenantsResponse
+	34,  // 99: ares.v1.ControlPlane.CreateEngagement:output_type -> ares.v1.Engagement
+	42,  // 100: ares.v1.ControlPlane.ListEngagements:output_type -> ares.v1.ListEngagementsResponse
+	34,  // 101: ares.v1.ControlPlane.GetEngagement:output_type -> ares.v1.Engagement
+	34,  // 102: ares.v1.ControlPlane.SetScope:output_type -> ares.v1.Engagement
+	34,  // 103: ares.v1.ControlPlane.Authorize:output_type -> ares.v1.Engagement
+	34,  // 104: ares.v1.ControlPlane.Halt:output_type -> ares.v1.Engagement
+	50,  // 105: ares.v1.ControlPlane.DispatchJob:output_type -> ares.v1.DispatchJobResponse
+	52,  // 106: ares.v1.ControlPlane.GetJob:output_type -> ares.v1.JobOutcome
+	56,  // 107: ares.v1.ControlPlane.ListJobs:output_type -> ares.v1.ListJobsResponse
+	59,  // 108: ares.v1.ControlPlane.ListFindings:output_type -> ares.v1.ListFindingsResponse
+	57,  // 109: ares.v1.ControlPlane.SetFindingStatus:output_type -> ares.v1.Finding
+	65,  // 110: ares.v1.ControlPlane.GetAudit:output_type -> ares.v1.GetAuditResponse
+	64,  // 111: ares.v1.ControlPlane.GenerateReport:output_type -> ares.v1.GenerateReportResponse
+	67,  // 112: ares.v1.ControlPlane.GetDetectionSummary:output_type -> ares.v1.DetectionSummary
+	67,  // 113: ares.v1.ControlPlane.SetDetection:output_type -> ares.v1.DetectionSummary
+	71,  // 114: ares.v1.ControlPlane.GetRiskPicture:output_type -> ares.v1.RiskPicture
+	79,  // 115: ares.v1.ControlPlane.ListPurpleTemplates:output_type -> ares.v1.ListPurpleTemplatesResponse
+	77,  // 116: ares.v1.ControlPlane.GetPurpleTemplate:output_type -> ares.v1.PurpleTemplate
+	2,   // 117: ares.v1.ControlPlane.Advise:output_type -> ares.v1.AdviseResponse
+	5,   // 118: ares.v1.ControlPlane.GetSettings:output_type -> ares.v1.SettingsView
+	5,   // 119: ares.v1.ControlPlane.UpdateSettings:output_type -> ares.v1.SettingsView
+	10,  // 120: ares.v1.ControlPlane.TestAIProvider:output_type -> ares.v1.TestAIProviderResponse
+	13,  // 121: ares.v1.ControlPlane.GetSetupStatus:output_type -> ares.v1.SetupStatus
+	15,  // 122: ares.v1.ControlPlane.TestDatabaseConnection:output_type -> ares.v1.TestDatabaseConnectionResponse
+	18,  // 123: ares.v1.ControlPlane.CommitSetup:output_type -> ares.v1.CommitSetupResponse
+	21,  // 124: ares.v1.ControlPlane.Login:output_type -> ares.v1.LoginResponse
+	23,  // 125: ares.v1.ControlPlane.Logout:output_type -> ares.v1.LogoutResponse
+	19,  // 126: ares.v1.ControlPlane.CurrentUser:output_type -> ares.v1.UserInfo
+	26,  // 127: ares.v1.ControlPlane.ListUsers:output_type -> ares.v1.ListUsersResponse
+	19,  // 128: ares.v1.ControlPlane.CreateUser:output_type -> ares.v1.UserInfo
+	19,  // 129: ares.v1.ControlPlane.SetUserRole:output_type -> ares.v1.UserInfo
+	19,  // 130: ares.v1.ControlPlane.SetUserDisabled:output_type -> ares.v1.UserInfo
+	82,  // 131: ares.v1.ControlPlane.MintAgentKey:output_type -> ares.v1.MintAgentKeyResponse
+	84,  // 132: ares.v1.ControlPlane.CancelAgentKey:output_type -> ares.v1.CancelAgentKeyResponse
+	87,  // 133: ares.v1.ControlPlane.ListAgentKeys:output_type -> ares.v1.ListAgentKeysResponse
+	90,  // 134: ares.v1.ControlPlane.ListAgents:output_type -> ares.v1.ListAgentsResponse
+	89,  // 135: ares.v1.ControlPlane.GetAgent:output_type -> ares.v1.AgentView
+	93,  // 136: ares.v1.ControlPlane.RemoveAgent:output_type -> ares.v1.RemoveAgentResponse
+	95,  // 137: ares.v1.ControlPlane.DispatchAgentJob:output_type -> ares.v1.DispatchAgentJobResponse
+	98,  // 138: ares.v1.ControlPlane.GetTestConsent:output_type -> ares.v1.TestConsent
+	98,  // 139: ares.v1.ControlPlane.SetTestIntensity:output_type -> ares.v1.TestConsent
+	97,  // 140: ares.v1.ControlPlane.ApproveTechnique:output_type -> ares.v1.TechniqueApproval
+	103, // 141: ares.v1.ControlPlane.DeclineTechnique:output_type -> ares.v1.DeclineTechniqueResponse
+	98,  // 142: ares.v1.ControlPlane.WithdrawApproval:output_type -> ares.v1.TestConsent
+	106, // 143: ares.v1.ControlPlane.StopJob:output_type -> ares.v1.StopJobResponse
+	96,  // [96:144] is the sub-list for method output_type
+	48,  // [48:96] is the sub-list for method input_type
+	48,  // [48:48] is the sub-list for extension type_name
+	48,  // [48:48] is the sub-list for extension extendee
+	0,   // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_ares_v1_ares_proto_init() }
@@ -7304,7 +8223,7 @@ func file_ares_v1_ares_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ares_v1_ares_proto_rawDesc), len(file_ares_v1_ares_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   97,
+			NumMessages:   108,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
