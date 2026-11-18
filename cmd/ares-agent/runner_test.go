@@ -70,13 +70,13 @@ func TestRunnerDispatchesAgentNative(t *testing.T) {
 	if res.Error == "" {
 		t.Fatal("egresscheck with no canary configured must refuse")
 	}
-	// hostposture runs locally and returns one info result.
-	res = r.Run(context.Background(), Task{TaskID: "n2", Capability: "hostposture"})
+	// persistcollect runs locally and returns one info result.
+	res = r.Run(context.Background(), Task{TaskID: "n2", Capability: "persistcollect"})
 	if res.Error != "" {
-		t.Fatalf("hostposture: %s", res.Error)
+		t.Fatalf("persistcollect: %s", res.Error)
 	}
 	var results []module.Result
-	if err := json.Unmarshal(res.Results, &results); err != nil || len(results) != 1 || results[0].Capability != "hostposture" {
-		t.Fatalf("hostposture results = %s (%v)", res.Results, err)
+	if err := json.Unmarshal(res.Results, &results); err != nil || len(results) != 1 || results[0].Capability != "persistcollect" {
+		t.Fatalf("persistcollect results = %s (%v)", res.Results, err)
 	}
 }

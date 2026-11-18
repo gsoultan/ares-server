@@ -74,13 +74,13 @@ func TestDispatchEgressCheckRefusedWithoutCanary(t *testing.T) {
 	}
 }
 
-func TestDispatchHostPostureIsAgentNative(t *testing.T) {
+func TestDispatchPersistCollectIsAgentNative(t *testing.T) {
 	h, ar, _ := dispatchHandler(t)
 	engID := authorizedEngagement(t, h)
 	a := enrolledAgent(t, h, ar, engID, []string{agent.CapHostPosture})
 	if _, err := h.DispatchAgentJob(context.Background(), connect.NewRequest(&aresv1.DispatchAgentJobRequest{
-		EngagementId: engID, AgentId: a.ID, Module: "hostposture",
+		EngagementId: engID, AgentId: a.ID, Module: "persistcollect",
 	})); err != nil {
-		t.Fatalf("hostposture is agent-native and allowed: %v", err)
+		t.Fatalf("persistcollect is agent-native and allowed: %v", err)
 	}
 }

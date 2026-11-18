@@ -5,7 +5,7 @@
 // part, via any medium, is strictly prohibited without the prior written
 // permission of the copyright holder.
 
-package hostposture
+package persistcollect
 
 import (
 	"context"

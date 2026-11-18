@@ -185,7 +185,7 @@ func (h *Handler) DispatchAgentJob(_ context.Context, req *connect.Request[aresv
 	mod := req.Msg.GetModule()
 	// The module must exist in the engine and be on the agent's capability
 	// allow-list. Both the server (here) and the agent enforce this.
-	// Agent-native capabilities (hostposture, egresscheck) run in the agent
+	// Agent-native capabilities (persistcollect, egresscheck) run in the agent
 	// itself, not as engine modules.
 	if _, known := h.reg.Get(mod); (!known && !agent.IsAgentNative(mod)) || agent.GroupOf(mod) == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument,

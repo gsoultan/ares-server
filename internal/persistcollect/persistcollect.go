@@ -5,7 +5,7 @@
 // part, via any medium, is strictly prohibited without the prior written
 // permission of the copyright holder.
 
-// Package hostposture is the agent's local, read-only posture collector for
+// Package persistcollect is the agent's local, read-only posture collector for
 // the malware and botnet detection wave (docs/detection-scenarios-malware-
 // botnet.md in the ares repository: M-12 to M-15, M-23, M-24).
 //
@@ -22,7 +22,7 @@
 // The output items use the same shape (name, path, kind, text, source) as the
 // engine readers' params, so the server can hand them straight to linpersist
 // or winpersist.
-package hostposture
+package persistcollect
 
 import (
 	"bufio"
@@ -198,7 +198,7 @@ func (c *Collector) readFile(rep *Report, full string) {
 		rep.Skipped = append(rep.Skipped, path+": over 1 MiB, first 1 MiB read")
 	}
 	c.total += len(b)
-	rep.Items = append(rep.Items, Item{Name: path, Path: path, Kind: "file", Text: string(b), Source: "hostposture"})
+	rep.Items = append(rep.Items, Item{Name: path, Path: path, Kind: "file", Text: string(b), Source: "persistcollect"})
 }
 
 // userFiles reads the per-user files for each account with a home directory.
@@ -261,7 +261,7 @@ func (c *Collector) commands(ctx context.Context, rep *Report, cmds []command) {
 			out = out[:maxCmdBytes]
 			rep.Skipped = append(rep.Skipped, label+": output over 4 MiB, truncated")
 		}
-		rep.Items = append(rep.Items, Item{Name: label, Kind: "command", Text: string(out), Source: "hostposture"})
+		rep.Items = append(rep.Items, Item{Name: label, Kind: "command", Text: string(out), Source: "persistcollect"})
 	}
 }
 

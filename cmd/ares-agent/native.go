@@ -13,7 +13,7 @@ import (
 	"fmt"
 
 	"github.com/gsoultan/ares-server/internal/egresscheck"
-	"github.com/gsoultan/ares-server/internal/hostposture"
+	"github.com/gsoultan/ares-server/internal/persistcollect"
 	"github.com/gsoultan/ares/module"
 )
 
@@ -35,10 +35,10 @@ func (r *capabilityRunner) runNative(ctx context.Context, t Task) Result {
 	res := Result{TaskID: t.TaskID}
 	var results []module.Result
 	switch t.Capability {
-	case "hostposture":
-		rep := hostposture.New().Collect(ctx)
+	case "persistcollect":
+		rep := persistcollect.New().Collect(ctx)
 		results = append(results, module.Result{
-			Capability: "hostposture", Kind: "info",
+			Capability: "persistcollect", Kind: "info",
 			Data: map[string]any{
 				"title": "Host posture collected", "os": rep.OS, "items": rep.Items,
 				"skipped": rep.Skipped, "truncated": rep.Truncated,

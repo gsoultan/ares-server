@@ -44,18 +44,7 @@ var moduleGroup = map[string]string{
 	// passive internal-exposure assessment (observation-only, inert)
 	"passivesniff": CapPassiveSniff,
 	"mitmexposure": CapMITMExposure,
-	// agent-native, read-only posture and the egress canary sender (see
-	// agentNative): they run in the agent, not as engine modules.
-	"hostposture": CapHostPosture,
-	"egresscheck": CapEgressCheck,
 }
-
-// agentNative lists the dispatchable capabilities implemented by the agent
-// itself rather than by an engine module.
-var agentNative = map[string]bool{"hostposture": true, "egresscheck": true}
-
-// IsAgentNative reports whether a module name is implemented by the agent.
-func IsAgentNative(module string) bool { return agentNative[module] }
 
 // AllCapabilities lists every capability group, for the operator UI. mitmexposure
 // is included but is off unless an operator adds it explicitly.
