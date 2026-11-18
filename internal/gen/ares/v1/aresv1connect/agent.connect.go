@@ -46,6 +46,16 @@ const (
 	AgentServiceDeregisterProcedure = "/ares.v1.AgentService/Deregister"
 )
 
+// These variables are the protoreflect.Descriptor objects for the RPCs defined in this package.
+var (
+	agentServiceServiceDescriptor           = v1.File_ares_v1_agent_proto.Services().ByName("AgentService")
+	agentServiceEnrollMethodDescriptor      = agentServiceServiceDescriptor.Methods().ByName("Enroll")
+	agentServiceHeartbeatMethodDescriptor   = agentServiceServiceDescriptor.Methods().ByName("Heartbeat")
+	agentServicePullTasksMethodDescriptor   = agentServiceServiceDescriptor.Methods().ByName("PullTasks")
+	agentServicePushResultsMethodDescriptor = agentServiceServiceDescriptor.Methods().ByName("PushResults")
+	agentServiceDeregisterMethodDescriptor  = agentServiceServiceDescriptor.Methods().ByName("Deregister")
+)
+
 // AgentServiceClient is a client for the ares.v1.AgentService service.
 type AgentServiceClient interface {
 	// Enroll redeems a one-time, engagement-scoped enrollment token (minted by an
@@ -81,36 +91,35 @@ type AgentServiceClient interface {
 // http://api.acme.com or https://acme.com/grpc).
 func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) AgentServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
-	agentServiceMethods := v1.File_ares_v1_agent_proto.Services().ByName("AgentService").Methods()
 	return &agentServiceClient{
 		enroll: connect.NewClient[v1.EnrollRequest, v1.EnrollResponse](
 			httpClient,
 			baseURL+AgentServiceEnrollProcedure,
-			connect.WithSchema(agentServiceMethods.ByName("Enroll")),
+			connect.WithSchema(agentServiceEnrollMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		heartbeat: connect.NewClient[v1.HeartbeatRequest, v1.HeartbeatResponse](
 			httpClient,
 			baseURL+AgentServiceHeartbeatProcedure,
-			connect.WithSchema(agentServiceMethods.ByName("Heartbeat")),
+			connect.WithSchema(agentServiceHeartbeatMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		pullTasks: connect.NewClient[v1.PullTasksRequest, v1.AgentTask](
 			httpClient,
 			baseURL+AgentServicePullTasksProcedure,
-			connect.WithSchema(agentServiceMethods.ByName("PullTasks")),
+			connect.WithSchema(agentServicePullTasksMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		pushResults: connect.NewClient[v1.PushResultsRequest, v1.PushResultsResponse](
 			httpClient,
 			baseURL+AgentServicePushResultsProcedure,
-			connect.WithSchema(agentServiceMethods.ByName("PushResults")),
+			connect.WithSchema(agentServicePushResultsMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 		deregister: connect.NewClient[v1.DeregisterRequest, v1.DeregisterResponse](
 			httpClient,
 			baseURL+AgentServiceDeregisterProcedure,
-			connect.WithSchema(agentServiceMethods.ByName("Deregister")),
+			connect.WithSchema(agentServiceDeregisterMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -182,35 +191,34 @@ type AgentServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
-	agentServiceMethods := v1.File_ares_v1_agent_proto.Services().ByName("AgentService").Methods()
 	agentServiceEnrollHandler := connect.NewUnaryHandler(
 		AgentServiceEnrollProcedure,
 		svc.Enroll,
-		connect.WithSchema(agentServiceMethods.ByName("Enroll")),
+		connect.WithSchema(agentServiceEnrollMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceHeartbeatHandler := connect.NewUnaryHandler(
 		AgentServiceHeartbeatProcedure,
 		svc.Heartbeat,
-		connect.WithSchema(agentServiceMethods.ByName("Heartbeat")),
+		connect.WithSchema(agentServiceHeartbeatMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServicePullTasksHandler := connect.NewServerStreamHandler(
 		AgentServicePullTasksProcedure,
 		svc.PullTasks,
-		connect.WithSchema(agentServiceMethods.ByName("PullTasks")),
+		connect.WithSchema(agentServicePullTasksMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServicePushResultsHandler := connect.NewUnaryHandler(
 		AgentServicePushResultsProcedure,
 		svc.PushResults,
-		connect.WithSchema(agentServiceMethods.ByName("PushResults")),
+		connect.WithSchema(agentServicePushResultsMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	agentServiceDeregisterHandler := connect.NewUnaryHandler(
 		AgentServiceDeregisterProcedure,
 		svc.Deregister,
-		connect.WithSchema(agentServiceMethods.ByName("Deregister")),
+		connect.WithSchema(agentServiceDeregisterMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/ares.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
