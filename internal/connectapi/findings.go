@@ -19,6 +19,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares-server/internal/worker"
@@ -208,7 +209,7 @@ func (h *Handler) ListFindings(_ context.Context, req *connect.Request[aresv1.Li
 
 // SetFindingStatus records the operator's triage state for a finding and audits
 // it on the finding's engagement.
-func (h *Handler) SetFindingStatus(_ context.Context, req *connect.Request[aresv1.SetFindingStatusRequest]) (*connect.Response[aresv1.Finding], error) {
+func (h *Handler) SetFindingStatus(ctx context.Context, req *connect.Request[aresv1.SetFindingStatusRequest]) (*connect.Response[aresv1.Finding], error) {
 	status := req.Msg.GetStatus()
 	if !validFindingStatus(status) {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("status must be open, in_progress or fixed"))
@@ -235,10 +236,7 @@ func (h *Handler) SetFindingStatus(_ context.Context, req *connect.Request[aresv
 	h.statuses.set(found.GetEngagementId(), found.GetId(), status)
 	found.Status = status
 
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	if eng, err := h.engagementInTenant(req.Msg.GetTenantId(), found.GetEngagementId()); err == nil {
 		eng.Audit.Append(actor, "finding-status", found.GetId(), status)
 		_ = h.store.Save(eng)

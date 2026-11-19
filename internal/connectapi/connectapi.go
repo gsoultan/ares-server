@@ -206,7 +206,7 @@ func (h *Handler) GetEngagement(_ context.Context, req *connect.Request[aresv1.G
 }
 
 // SetScope configures the permission gate while the engagement is a draft.
-func (h *Handler) SetScope(_ context.Context, req *connect.Request[aresv1.SetScopeRequest]) (*connect.Response[aresv1.Engagement], error) {
+func (h *Handler) SetScope(ctx context.Context, req *connect.Request[aresv1.SetScopeRequest]) (*connect.Response[aresv1.Engagement], error) {
 	eng, err := h.engagementInTenant(req.Msg.GetTenantId(), req.Msg.GetId())
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func (h *Handler) SetScope(_ context.Context, req *connect.Request[aresv1.SetSco
 			}
 		}
 	}
-	eng.Audit.Append("grpc", "scope-updated", eng.ID,
+	eng.Audit.Append(auth.Actor(ctx, "", "grpc"), "scope-updated", eng.ID,
 		fmt.Sprintf("%d in scope, %d excluded", len(req.Msg.GetInScope()), len(req.Msg.GetExclude())))
 	if err := h.store.Save(eng); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -262,7 +262,7 @@ func (h *Handler) SetScope(_ context.Context, req *connect.Request[aresv1.SetSco
 }
 
 // Authorize attaches a signed permission and enables running.
-func (h *Handler) Authorize(_ context.Context, req *connect.Request[aresv1.AuthorizeRequest]) (*connect.Response[aresv1.Engagement], error) {
+func (h *Handler) Authorize(ctx context.Context, req *connect.Request[aresv1.AuthorizeRequest]) (*connect.Response[aresv1.Engagement], error) {
 	eng, err := h.engagementInTenant(req.Msg.GetTenantId(), req.Msg.GetId())
 	if err != nil {
 		return nil, err
@@ -273,6 +273,12 @@ func (h *Handler) Authorize(_ context.Context, req *connect.Request[aresv1.Autho
 	}); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
+	// approved_by names the client's signatory; record separately which
+	// signed-in account attached the permission, so the trail shows both.
+	if sess, ok := auth.SessionFrom(ctx); ok {
+		eng.Audit.Append(auth.Actor(ctx, "", "operator"), "authorization-recorded", eng.ID,
+			"permission attached by "+string(sess.Role))
+	}
 	if err := h.store.Save(eng); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -280,15 +286,12 @@ func (h *Handler) Authorize(_ context.Context, req *connect.Request[aresv1.Autho
 }
 
 // Halt is the kill switch.
-func (h *Handler) Halt(_ context.Context, req *connect.Request[aresv1.HaltRequest]) (*connect.Response[aresv1.Engagement], error) {
+func (h *Handler) Halt(ctx context.Context, req *connect.Request[aresv1.HaltRequest]) (*connect.Response[aresv1.Engagement], error) {
 	eng, err := h.engagementInTenant(req.Msg.GetTenantId(), req.Msg.GetId())
 	if err != nil {
 		return nil, err
 	}
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	eng.Halt(actor)
 	if err := h.store.Save(eng); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -299,7 +302,7 @@ func (h *Handler) Halt(_ context.Context, req *connect.Request[aresv1.HaltReques
 // DispatchJob enqueues a job against the engagement's targets. It refuses
 // immediately if the engagement cannot run; the worker still re-checks the gate
 // per target before any module acts.
-func (h *Handler) DispatchJob(_ context.Context, req *connect.Request[aresv1.DispatchJobRequest]) (*connect.Response[aresv1.DispatchJobResponse], error) {
+func (h *Handler) DispatchJob(ctx context.Context, req *connect.Request[aresv1.DispatchJobRequest]) (*connect.Response[aresv1.DispatchJobResponse], error) {
 	eng, err := h.engagementInTenant(req.Msg.GetTenantId(), req.Msg.GetEngagementId())
 	if err != nil {
 		return nil, err
@@ -311,10 +314,7 @@ func (h *Handler) DispatchJob(_ context.Context, req *connect.Request[aresv1.Dis
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			fmt.Errorf("unknown module %q", req.Msg.GetModule()))
 	}
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	params, err := structToJSON(req.Msg.GetParams())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid params: %w", err))
@@ -461,15 +461,12 @@ func (h *Handler) GetRiskPicture(_ context.Context, req *connect.Request[aresv1.
 
 // SetDetection records the defender's response for one technique and returns the
 // updated summary.
-func (h *Handler) SetDetection(_ context.Context, req *connect.Request[aresv1.SetDetectionRequest]) (*connect.Response[aresv1.DetectionSummary], error) {
+func (h *Handler) SetDetection(ctx context.Context, req *connect.Request[aresv1.SetDetectionRequest]) (*connect.Response[aresv1.DetectionSummary], error) {
 	eng, err := h.engagementInTenant(req.Msg.GetTenantId(), req.Msg.GetId())
 	if err != nil {
 		return nil, err
 	}
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	if err := eng.SetDetection(req.Msg.GetTechnique(), detection.Outcome(req.Msg.GetOutcome()), req.Msg.GetNote(), actor); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}

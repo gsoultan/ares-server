@@ -16,6 +16,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/gsoultan/ares-server/internal/agent"
+	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares/module"
@@ -37,7 +38,7 @@ func (h *Handler) agentsEnabled() error {
 // MintAgentKey records the host-owner permission and creates a one-time install
 // key for the engagement. The engagement must be able to run; a permission
 // record is required.
-func (h *Handler) MintAgentKey(_ context.Context, req *connect.Request[aresv1.MintAgentKeyRequest]) (*connect.Response[aresv1.MintAgentKeyResponse], error) {
+func (h *Handler) MintAgentKey(ctx context.Context, req *connect.Request[aresv1.MintAgentKeyRequest]) (*connect.Response[aresv1.MintAgentKeyResponse], error) {
 	if err := h.agentsEnabled(); err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func (h *Handler) MintAgentKey(_ context.Context, req *connect.Request[aresv1.Mi
 	if err != nil {
 		return nil, mapAgentErr(err)
 	}
-	eng.Audit.Append(consent.RecordedBy, "agent.key.mint", keyID, "install key minted")
+	eng.Audit.Append(auth.Actor(ctx, consent.RecordedBy, "operator"), "agent.key.mint", keyID, "install key minted")
 	_ = h.store.Save(eng)
 	return connect.NewResponse(&aresv1.MintAgentKeyResponse{
 		KeyId:      keyID,
@@ -67,7 +68,7 @@ func (h *Handler) MintAgentKey(_ context.Context, req *connect.Request[aresv1.Mi
 }
 
 // CancelAgentKey withdraws an unused install key.
-func (h *Handler) CancelAgentKey(_ context.Context, req *connect.Request[aresv1.CancelAgentKeyRequest]) (*connect.Response[aresv1.CancelAgentKeyResponse], error) {
+func (h *Handler) CancelAgentKey(ctx context.Context, req *connect.Request[aresv1.CancelAgentKeyRequest]) (*connect.Response[aresv1.CancelAgentKeyResponse], error) {
 	if err := h.agentsEnabled(); err != nil {
 		return nil, err
 	}
@@ -75,10 +76,12 @@ func (h *Handler) CancelAgentKey(_ context.Context, req *connect.Request[aresv1.
 	if err != nil {
 		return nil, err
 	}
-	if err := h.agents.CancelEnrollToken(req.Msg.GetKeyId()); err != nil {
+	// The key must belong to this engagement: an operator may cancel only the
+	// install keys of an engagement they can see, never another workspace's.
+	if err := h.agents.CancelEnrollToken(eng.TenantID, eng.ID, req.Msg.GetKeyId()); err != nil {
 		return nil, mapAgentErr(err)
 	}
-	eng.Audit.Append("operator", "agent.key.cancel", req.Msg.GetKeyId(), "install key cancelled")
+	eng.Audit.Append(auth.Actor(ctx, "", "operator"), "agent.key.cancel", req.Msg.GetKeyId(), "install key cancelled")
 	_ = h.store.Save(eng)
 	return connect.NewResponse(&aresv1.CancelAgentKeyResponse{Ok: true}), nil
 }
@@ -142,7 +145,7 @@ func (h *Handler) GetAgent(_ context.Context, req *connect.Request[aresv1.GetAge
 
 // RemoveAgent revokes an agent immediately; it self-uninstalls on next contact.
 // Findings it already sent are kept.
-func (h *Handler) RemoveAgent(_ context.Context, req *connect.Request[aresv1.RemoveAgentRequest]) (*connect.Response[aresv1.RemoveAgentResponse], error) {
+func (h *Handler) RemoveAgent(ctx context.Context, req *connect.Request[aresv1.RemoveAgentRequest]) (*connect.Response[aresv1.RemoveAgentResponse], error) {
 	if err := h.agentsEnabled(); err != nil {
 		return nil, err
 	}
@@ -157,7 +160,7 @@ func (h *Handler) RemoveAgent(_ context.Context, req *connect.Request[aresv1.Rem
 	if err := h.agents.Revoke(a.ID); err != nil {
 		return nil, mapAgentErr(err)
 	}
-	eng.Audit.Append("operator", "agent.remove", a.ID, "agent revoked; self-uninstalls on next contact")
+	eng.Audit.Append(auth.Actor(ctx, "", "operator"), "agent.remove", a.ID, "agent revoked; self-uninstalls on next contact")
 	_ = h.store.Save(eng)
 	return connect.NewResponse(&aresv1.RemoveAgentResponse{Ok: true}), nil
 }
@@ -165,7 +168,7 @@ func (h *Handler) RemoveAgent(_ context.Context, req *connect.Request[aresv1.Rem
 // DispatchAgentJob queues an authorized check for an agent. The server
 // gate-checks it and hands the agent the engagement scope snapshot; the agent
 // re-enforces the scope locally before touching a target (the double barrier).
-func (h *Handler) DispatchAgentJob(_ context.Context, req *connect.Request[aresv1.DispatchAgentJobRequest]) (*connect.Response[aresv1.DispatchAgentJobResponse], error) {
+func (h *Handler) DispatchAgentJob(ctx context.Context, req *connect.Request[aresv1.DispatchAgentJobRequest]) (*connect.Response[aresv1.DispatchAgentJobResponse], error) {
 	if err := h.agentsEnabled(); err != nil {
 		return nil, err
 	}
@@ -210,7 +213,7 @@ func (h *Handler) DispatchAgentJob(_ context.Context, req *connect.Request[aresv
 	}
 	// Reflect "running a check" in the agent's UI status.
 	h.agents.SetCurrentCapability(a.ID, mod)
-	eng.Audit.Append("operator", "agent.dispatch", a.ID, "queued "+mod)
+	eng.Audit.Append(auth.Actor(ctx, "", "operator"), "agent.dispatch", a.ID, "queued "+mod)
 	_ = h.store.Save(eng)
 	return connect.NewResponse(&aresv1.DispatchAgentJobResponse{TaskId: taskID}), nil
 }

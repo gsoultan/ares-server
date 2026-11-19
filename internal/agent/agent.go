@@ -265,10 +265,11 @@ func (r *Registry) MintEnrollToken(tenantID, engagementID string, capabilities [
 }
 
 // CancelEnrollToken cancels an unused install key by id, so the UI's "unused
-// install keys" list can withdraw one before it is redeemed. Cancelling a
-// redeemed or unknown key is reported; cancelling an already-cancelled key is a
-// no-op.
-func (r *Registry) CancelEnrollToken(id string) error {
+// install keys" list can withdraw one before it is redeemed. The key must belong
+// to the given workspace and engagement; any other key is reported as unknown.
+// Cancelling a redeemed or unknown key is reported; cancelling an
+// already-cancelled key is a no-op.
+func (r *Registry) CancelEnrollToken(tenantID, engagementID, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	th, ok := r.tokensByID[id]
@@ -276,6 +277,11 @@ func (r *Registry) CancelEnrollToken(id string) error {
 		return ErrUnknownKey
 	}
 	tok := r.tokens[th]
+	// A key outside the caller's engagement is reported exactly like an unknown
+	// one, so another workspace's key ids cannot be probed or cancelled.
+	if tok.TenantID != tenantID || tok.EngagementID != engagementID {
+		return ErrUnknownKey
+	}
 	if tok.Redeemed {
 		return ErrUnknownKey // already spent — nothing to cancel
 	}

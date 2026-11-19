@@ -354,3 +354,29 @@ func TestRESTBodyTenantIsBoundToSession(t *testing.T) {
 		t.Fatal("member can see another client's workspace")
 	}
 }
+
+// On the REST surface too, a signed-in caller's audit entries name the account,
+// not whatever "actor" the body claims.
+func TestRESTAuditActorIsTheSignedInAccount(t *testing.T) {
+	store := engagement.NewMemStore()
+	s := New(store, module.NewRegistry(), queue.New(4), worker.NewMemOutcomes())
+	h := s.Routes()
+	sess := auth.Session{UserID: "u1", TenantID: engagement.ResolveTenant(""), Role: auth.RoleMember, Email: "ana@example.com"}
+	eng, err := store.Create(sess.TenantID, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest("POST", "/api/engagements/"+eng.ID+"/halt", strings.NewReader(`{"actor":"the-ciso"}`))
+	r = r.WithContext(auth.WithSession(r.Context(), sess))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("halt = %d: %s", w.Code, w.Body.String())
+	}
+	got, _ := store.Get(eng.ID)
+	entries := got.Audit.Entries()
+	if last := entries[len(entries)-1]; last.Action != "engagement-halted" || last.Actor != "ana@example.com" {
+		t.Fatalf("last entry = %+v, want engagement-halted by the signed-in account", last)
+	}
+}
