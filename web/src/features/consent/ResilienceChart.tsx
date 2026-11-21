@@ -8,6 +8,8 @@ export interface RampStep {
   p50Ms: number;
   p95Ms: number;
   rate429: number;
+  // Cut short by a stop: shown, never scored.
+  partial?: boolean;
 }
 
 const LOAD = "var(--mantine-color-brand-6)";
