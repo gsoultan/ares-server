@@ -62,6 +62,9 @@ type Engagement struct {
 	// Detection holds the operator's recorded defender response per ATT&CK
 	// technique the engagement's tests exercised (the blue/purple seam).
 	Detection map[string]detection.Record `json:"-"`
+	// Consent is the engagement's test intensity and its intrusive-test
+	// approvals (see consent.go). Nil means safe proof only.
+	Consent *ConsentRecord `json:"-"`
 }
 
 // SetDetection records the defender's response for one technique and writes it

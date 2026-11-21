@@ -51,6 +51,7 @@ type record struct {
 	Scope         scope.Snapshot
 	Audit         []audit.Entry
 	Detection     map[string]detection.Record
+	Consent       *engagement.ConsentRecord
 }
 
 // auditBucket holds the audit trails, append-only, one bbolt key per entry:
@@ -186,6 +187,7 @@ func (s *Store) load() error {
 			tenantID = tenant.DefaultID
 		}
 		eng := engagement.Restore(r.ID, tenantID, r.Name, engagement.Status(r.Status), r.Authorization, r.CreatedAt, sc, log, r.Detection)
+		eng.Consent = r.Consent
 		s.m[r.ID] = eng
 		st := &savedState{auditN: len(trail)}
 		s.saved[r.ID] = st
@@ -389,6 +391,7 @@ func headerRecord(e *engagement.Engagement) record {
 		CreatedAt:     e.CreatedAt,
 		Scope:         e.Scope.Snapshot(),
 		Detection:     e.Detection,
+		Consent:       e.ConsentForStore(),
 	}
 }
 

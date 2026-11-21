@@ -1,10 +1,11 @@
 // The sections of one engagement, in the order the work happens.
-export const ENGAGEMENT_VIEWS = ["setup", "profile", "testing", "findings", "risk"] as const;
+export const ENGAGEMENT_VIEWS = ["setup", "profile", "agents", "testing", "findings", "risk"] as const;
 export type EngagementView = (typeof ENGAGEMENT_VIEWS)[number];
 
 export const VIEW_LABELS: Record<EngagementView, string> = {
   setup: "Scope and permission",
   profile: "Target profile",
+  agents: "Agents",
   testing: "Run tests",
   findings: "Findings",
   risk: "Risk picture",
