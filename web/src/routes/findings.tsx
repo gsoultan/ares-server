@@ -6,6 +6,7 @@ import type { Severity } from "../lib/findings.ts";
 import { EmptyState, LoadingState, PageHeader, StatCard } from "../ui/index.tsx";
 import { FindingsTable } from "../features/findings/FindingsTable.tsx";
 import { countBySeverity } from "../features/findings/SeverityCounts.tsx";
+import { SOURCES, useFoundBy } from "../features/findings/foundBy.ts";
 import {
   isUnresolved,
   useEngagements,
@@ -39,12 +40,15 @@ export function FindingsPage() {
   const { findings, loading } = useFindings();
   const [view, setView] = useState("open");
   const [severity, setSeverity] = useState<string | null>(null);
+  const [source, setSource] = useState<string | null>(null);
 
   const engagement = all.some((e) => e.id === search.engagement) ? search.engagement! : null;
+  const foundBy = useFoundBy(engagement ? [engagement] : all.map((e) => e.id));
   const scoped = findings.filter(
     (f) =>
       (!engagement || f.engagementId === engagement) &&
-      (!severity || f.finding.severity === (severity as Severity)),
+      (!severity || f.finding.severity === (severity as Severity)) &&
+      (!source || foundBy(f).source === source),
   );
   const rows = scoped.filter(VIEWS.find((v) => v.value === view)!.match);
   const unresolved = countBySeverity(scoped.filter(isUnresolved));
@@ -94,6 +98,15 @@ export function FindingsPage() {
             w={220}
           />
           <Select
+            aria-label="Found by"
+            placeholder="Found by anything"
+            data={SOURCES.map((s) => ({ value: s.value, label: s.filter }))}
+            value={source}
+            onChange={setSource}
+            clearable
+            w={180}
+          />
+          <Select
             aria-label="Severity"
             placeholder="Any severity"
             data={SEVERITIES}
@@ -119,7 +132,7 @@ export function FindingsPage() {
             }
           />
         ) : (
-          <FindingsTable findings={rows} engagementNames={names} />
+          <FindingsTable findings={rows} engagementNames={names} foundBy={foundBy} />
         )}
       </Card>
     </Stack>
