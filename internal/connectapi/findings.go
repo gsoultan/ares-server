@@ -114,6 +114,14 @@ func (p *pendingJobs) remove(jobID string) {
 	delete(p.m, jobID)
 }
 
+// get returns the engagement of a pending job.
+func (p *pendingJobs) get(jobID string) (string, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	j, ok := p.m[jobID]
+	return j.engagement, ok
+}
+
 // snapshot returns a copy of the pending jobs for one engagement.
 func (p *pendingJobs) snapshot(engagement string) map[string]pendingJob {
 	p.mu.Lock()

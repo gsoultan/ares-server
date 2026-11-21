@@ -227,6 +227,7 @@ func (s *Store) loadEngagement(ctx context.Context, r engagementpkg.Row, trail [
 		tenantID = tenant.DefaultID
 	}
 	eng := engagement.Restore(r.ID, tenantID, r.Name, engagement.Status(doc.Status), doc.Authorization, r.CreatedAt, sc, log, doc.Detection)
+	eng.Consent = doc.Consent
 	s.m[r.ID] = eng
 
 	st := &savedState{auditN: len(trail)}
@@ -477,6 +478,7 @@ func headerJSON(e *engagement.Engagement) ([]byte, error) {
 		Authorization: e.Authorization,
 		Scope:         e.Scope.Snapshot(),
 		Detection:     e.Detection,
+		Consent:       e.ConsentForStore(),
 	})
 }
 

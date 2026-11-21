@@ -44,6 +44,7 @@ import (
 	"github.com/gsoultan/ares-server/internal/setup"
 	"github.com/gsoultan/ares-server/internal/store/pgstore"
 	"github.com/gsoultan/ares-server/internal/store/stormstore"
+	"github.com/gsoultan/ares-server/internal/technique"
 	"github.com/gsoultan/ares-server/internal/worker"
 	"github.com/gsoultan/ares/canary"
 	"github.com/gsoultan/ares/engine"
@@ -87,6 +88,11 @@ func main() {
 	})
 	if err != nil {
 		log.Fatalf("engine: %v", err)
+	}
+	// Describe the engine modules that go beyond safe proof but ship without a
+	// capability, so the consent gate knows their level.
+	if err := technique.Register(reg); err != nil {
+		log.Fatalf("technique: %v", err)
 	}
 
 	// Persistence: Storm (bbolt) by default, so engagements, scope,
@@ -244,6 +250,7 @@ func main() {
 	// ARES_CANARY_ALT_URL / ARES_CANARY_HIGH_URL to collaborator listeners on a
 	// non-standard HTTPS port and a high plain-HTTP port to test those channels.
 	grpcHandler.WithEgressCanary(canaryStore, canaryBase, canaryDomain, os.Getenv("ARES_CANARY_ALT_URL"), os.Getenv("ARES_CANARY_HIGH_URL"))
+	grpcHandler.WithJobs(pool)
 	if settingsSvc != nil {
 		grpcHandler.WithSettings(settingsSvc)
 	}

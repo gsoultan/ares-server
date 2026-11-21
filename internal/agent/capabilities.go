@@ -44,6 +44,13 @@ var moduleGroup = map[string]string{
 	// passive internal-exposure assessment (observation-only, inert)
 	"passivesniff": CapPassiveSniff,
 	"mitmexposure": CapMITMExposure,
+	// local read-only Linux host posture (the v6 Linux CVE wave). sshbanner is
+	// a pre-auth banner read and belongs with the host's own posture; nftreach
+	// is the consented level-3 nf_tables reachability probe, gated by a
+	// recorded approval in the module itself.
+	"hostposture": CapHostPosture,
+	"sshbanner":   CapHostPosture,
+	"nftreach":    CapHostPosture,
 }
 
 // AllCapabilities lists every capability group, for the operator UI. mitmexposure

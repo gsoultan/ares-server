@@ -61,6 +61,7 @@ type Handler struct {
 	setup    *setup.Service    // nil disables the setup RPCs
 	agents   *agent.Registry   // nil disables the agent-management RPCs
 	egress   *egressMinter     // nil refuses egresscheck dispatch (see egress.go)
+	jobs     JobStopper        // nil disables StopJob
 }
 
 // compile-time check that Handler satisfies the generated interface.
@@ -325,6 +326,11 @@ func (h *Handler) DispatchJob(_ context.Context, req *connect.Request[aresv1.Dis
 		targets = append(targets, targetDomain(t))
 	}
 	jobID := uuid.NewV7()
+	// The consent gate: the engagement's test intensity, and for an intrusive
+	// test a usable approval per target, reserved for this job.
+	if err := h.consentPrecheck(eng, req.Msg.GetModule(), targets, jobID); err != nil {
+		return nil, err
+	}
 	if err := h.queue.TryEnqueue(queue.Job{
 		ID:           jobID,
 		EngagementID: eng.ID,
@@ -333,8 +339,10 @@ func (h *Handler) DispatchJob(_ context.Context, req *connect.Request[aresv1.Dis
 		Targets:      targets,
 		Params:       params,
 	}); err != nil {
+		eng.ReleaseJob(jobID)
 		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("job queue is full, try again shortly"))
 	}
+	_ = h.store.Save(eng)
 	// Record it as running so ListJobs shows an in-flight row that survives a page
 	// reload; it is pruned once the worker records the outcome.
 	h.pending.add(jobID, eng.ID, req.Msg.GetModule())

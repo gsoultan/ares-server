@@ -25,6 +25,13 @@ import { useActivity } from "../features/engagement/useActivity.ts";
 import { FindingDetail } from "../features/findings/FindingDetail.tsx";
 import { FindingsTable } from "../features/findings/FindingsTable.tsx";
 import { useFindings } from "../features/workspace/data.ts";
+import { AddAgent } from "../features/agents/AddAgent.tsx";
+import { AgentDetail } from "../features/agents/AgentDetail.tsx";
+import { AgentsSection } from "../features/agents/AgentsSection.tsx";
+import { useAgentActivity } from "../features/agents/data.ts";
+import { useFoundBy } from "../features/findings/foundBy.ts";
+import { RESILIENCE, ResilienceTest } from "../features/consent/Resilience.tsx";
+import { IntensitySummary, TestIntensity } from "../features/consent/TestIntensity.tsx";
 
 const route = getRouteApi("/engagements/$id");
 
@@ -49,6 +56,8 @@ export function EngagementDetailPage() {
   const activity = useActivity(id);
   const { findings, loading: findingsLoading } = useFindings(id);
   const { profiles } = useProfile(id);
+  const agentLog = useAgentActivity(activity.entries);
+  const foundBy = useFoundBy([id]);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ["engagement", tenantId, id] });
@@ -80,6 +89,41 @@ export function EngagementDetailPage() {
     : undefined;
   if (opened) {
     return <FindingDetail record={opened} engagementName={eng.name} canTest={canTest} />;
+  }
+
+  // One agent, or adding one, also takes the whole page.
+  const agentFindings = findings.filter((f) => agentLog.taskAgent.has(f.jobId));
+  if (view === "agents" && search.agent === "new" && canTest) {
+    return <AddAgent engagement={eng} />;
+  }
+  if (view === "agents" && search.agent && search.agent !== "new") {
+    return (
+      <AgentDetail
+        engagement={eng}
+        agentId={search.agent}
+        findings={agentFindings.filter((f) => agentLog.taskAgent.get(f.jobId) === search.agent)}
+        activity={agentLog.byAgent.get(search.agent) ?? []}
+        canTest={canTest}
+      />
+    );
+  }
+
+  // Choosing how far tests may go takes the whole page.
+  if (view === "setup" && search.page === "intensity" && eng.status !== "draft") {
+    return <TestIntensity engagement={eng} />;
+  }
+  // So does the resilience test: its setup, approval, run and result.
+  if (view === "testing" && search.test === RESILIENCE && (canTest || search.job)) {
+    return (
+      <ResilienceTest
+        key={search.job ?? "setup"}
+        engagement={eng}
+        jobId={search.job}
+        defaultTarget={profiles[0]?.target}
+        activity={activity.entries ?? []}
+        findings={findings}
+      />
+    );
   }
 
   // The saved scope, in the server's own words, from the latest log entry.
@@ -151,6 +195,7 @@ export function EngagementDetailPage() {
             </Link>
           </Section>
         ))}
+      {view === "setup" && eng.status !== "draft" && <IntensitySummary engagement={eng} />}
 
       {view === "profile" && (
         <>
@@ -158,6 +203,8 @@ export function EngagementDetailPage() {
           {(canTest || profiles.length > 0) && <TargetProfile id={id} canTest={canTest} />}
         </>
       )}
+
+      {view === "agents" && <AgentsSection id={id} canTest={canTest} agentFindings={agentFindings} />}
 
       {view === "testing" &&
         (canTest ? (
@@ -191,7 +238,7 @@ export function EngagementDetailPage() {
               description="Weaknesses the tests find in this engagement are listed here."
             />
           ) : (
-            <FindingsTable findings={findings} />
+            <FindingsTable findings={findings} foundBy={foundBy} />
           )}
         </Section>
       )}

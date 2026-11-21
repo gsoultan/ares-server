@@ -53,6 +53,7 @@ type EngagementDoc struct {
 	// headers never carry it.
 	Audit     []audit.Entry               `json:"audit,omitempty"`
 	Detection map[string]detection.Record `json:"detection,omitempty"`
+	Consent   *engagement.ConsentRecord   `json:"consent,omitempty"`
 }
 
 // Engagement is one assessment. Data is a jsonb document (see EngagementDoc).
