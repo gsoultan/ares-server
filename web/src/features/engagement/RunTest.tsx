@@ -17,7 +17,7 @@ import {
 import { IconChevronDown, IconChevronRight, IconChevronUp, IconCircleCheck, IconPlayerPlay } from "@tabler/icons-react";
 import type { JsonObject } from "@bufbuild/protobuf";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { control } from "../../client.ts";
 import { AccessCheckForm } from "../../components/AccessCheckForm.tsx";
 import { severityRank, toFinding, type Severity } from "../../lib/findings.ts";
@@ -28,6 +28,7 @@ import { liveRun, markPlayed } from "../../lib/local.ts";
 import { timeLeft } from "../../lib/timeLeft.ts";
 import { LiveTest } from "./LiveTest.tsx";
 import { useStartTest } from "./startTest.ts";
+import { RESILIENCE } from "../consent/Resilience.tsx";
 
 // RunTest is the testing section of an engagement: start a test, see the tests
 // that ran before, and read the results of the one that is selected.
@@ -54,6 +55,7 @@ export function RunTest({
   // The earlier test whose results are showing. The newest, unless one is picked.
   const [picked, setPicked] = useState<string | null>(null);
 
+  const navigate = useNavigate();
   const { jobs } = useJobs(id);
   const dispatch = useStartTest(id);
   const shown = jobs.find((j) => j.jobId === picked) ?? jobs[0];
@@ -136,6 +138,11 @@ export function RunTest({
             data={options}
             value={moduleName}
             onChange={(v) => {
+              // The resilience test has its own page, with its approval.
+              if (v === RESILIENCE) {
+                void navigate({ to: "/engagements/$id", params: { id }, search: { view: "testing", test: RESILIENCE } });
+                return;
+              }
               setModuleName(v);
               setApkB64(null);
               setApkName("");

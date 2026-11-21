@@ -112,6 +112,29 @@ service ControlPlane {
   // engagement scope snapshot; the agent re-enforces the scope locally before
   // touching any target. Results flow back into the same findings pipeline.
   rpc DispatchAgentJob(DispatchAgentJobRequest) returns (DispatchAgentJobResponse);
+
+  // Test intensity and consent. Each engagement allows tests up to one of the
+  // engine's consent levels: 1 safe proof (default, always on), 2 active
+  // confirmation (per-engagement opt-in), 3 intrusive but recoverable (also
+  // needs a recorded, single-use approval per technique and per target before
+  // each run). There is no level above 3: nothing irreversible can be allowed.
+  //
+  // GetTestConsent returns the engagement's level, the tests above safe proof
+  // with what each does, and the approvals on file.
+  rpc GetTestConsent(GetTestConsentRequest) returns (TestConsent);
+  // SetTestIntensity sets the highest level the engagement allows. Lowering it
+  // withdraws unused approvals. Managers only. Audited.
+  rpc SetTestIntensity(SetTestIntensityRequest) returns (TestConsent);
+  // ApproveTechnique records a single-use approval for one intrusive test
+  // against one in-scope target. Managers only. Audited.
+  rpc ApproveTechnique(ApproveTechniqueRequest) returns (TechniqueApproval);
+  // DeclineTechnique records that an intrusive test was not allowed. Audited.
+  rpc DeclineTechnique(DeclineTechniqueRequest) returns (DeclineTechniqueResponse);
+  // WithdrawApproval takes back an approval that has not been used. Audited.
+  rpc WithdrawApproval(WithdrawApprovalRequest) returns (TestConsent);
+  // StopJob stops one running test at once (the resilience test's "Stop now")
+  // without stopping the engagement. Audited.
+  rpc StopJob(StopJobRequest) returns (StopJobResponse);
 }
 
 // AdviseRequest asks the optional AI advisor to analyze engagement data.
@@ -976,3 +999,88 @@ message DispatchAgentJobRequest {
   repeated Target targets = 5;
 }
 message DispatchAgentJobResponse { string task_id = 1; }
+
+// ---- Test intensity and consent -------------------------------------------
+
+// TechniqueInfo describes a test above safe proof in the words an approver
+// needs before allowing it.
+message TechniqueInfo {
+  string module = 1;
+  int32 level = 2;      // 2 active confirmation, 3 intrusive
+  string name = 3;
+  string action = 4;    // what it does
+  string risk = 5;      // what could go wrong
+  bool reversible = 6;  // its effect ends or is undone
+  string recovery = 7;  // how it is undone
+  string touches = 8;   // what it touches
+  string limit = 9;     // the hard limit it never crosses
+}
+
+message TechniqueApproval {
+  string id = 1;
+  string module = 2;
+  string target = 3;
+  string approved_by = 4;
+  string how = 5;
+  string note = 6;
+  string approved_at = 7; // RFC3339
+  string job_id = 8;      // set once a run used it
+  string used_at = 9;     // RFC3339
+  bool withdrawn = 10;
+}
+
+message TestConsent {
+  int32 level = 1;      // 1–3
+  string set_by = 2;
+  string set_at = 3;    // RFC3339, empty while the default
+  repeated TechniqueInfo techniques = 4;
+  repeated TechniqueApproval approvals = 5;
+}
+
+message GetTestConsentRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+}
+
+message SetTestIntensityRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  int32 level = 3;
+  string actor = 4;
+}
+
+message ApproveTechniqueRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string module = 3;
+  Target target = 4;
+  string approved_by = 5; // the named approver
+  string how = 6;         // how they gave it
+  string note = 7;
+}
+
+message DeclineTechniqueRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string module = 3;
+  Target target = 4;
+  string actor = 5;
+  string note = 6;
+}
+message DeclineTechniqueResponse { bool ok = 1; }
+
+message WithdrawApprovalRequest {
+  string engagement_id = 1;
+  string tenant_id = 2;
+  string approval_id = 3;
+  string actor = 4;
+}
+
+message StopJobRequest {
+  string tenant_id = 1;
+  string job_id = 2;
+  string actor = 3;
+}
+message StopJobResponse {
+  bool stopped = 1; // false when the test had already finished
+}

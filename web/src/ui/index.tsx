@@ -12,7 +12,7 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
+import { IconAlertTriangle, IconInfoCircle, IconShieldCheck } from "@tabler/icons-react";
 import { severityColor, severityLabel, type Severity } from "../lib/findings.ts";
 import { toneColor, type StatusInfo, type Tone } from "../lib/labels.ts";
 
@@ -196,9 +196,27 @@ export function ErrorNote({ title, children }: { title: string; children?: React
   );
 }
 
-export function InfoNote({ children, title }: { children: ReactNode; title?: string }) {
+// InfoNote is a quiet note. A tone marks it as a safeguard (good) or a
+// caution (warn); the default is neutral.
+export function InfoNote({
+  children,
+  title,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  title?: string;
+  tone?: Tone;
+}) {
+  const icon =
+    tone === "good" ? (
+      <IconShieldCheck size={18} />
+    ) : tone === "warn" || tone === "bad" ? (
+      <IconAlertTriangle size={18} />
+    ) : (
+      <IconInfoCircle size={18} />
+    );
   return (
-    <Alert color="gray" title={title} icon={<IconInfoCircle size={18} />}>
+    <Alert color={tone === "neutral" ? "gray" : toneColor(tone)} title={title} icon={icon}>
       {children}
     </Alert>
   );
