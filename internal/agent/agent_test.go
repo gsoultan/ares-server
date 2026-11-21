@@ -74,7 +74,18 @@ func TestCancelAndListEnrollTokens(t *testing.T) {
 	if got := r.ListEnrollTokens("t1", "e1"); len(got) != 1 || got[0].ID != id {
 		t.Fatalf("want one usable key %s, got %+v", id, got)
 	}
-	if err := r.CancelEnrollToken(id); err != nil {
+	// Another engagement or workspace cannot cancel it, and learns nothing:
+	// the error is the same as for an id that does not exist.
+	if err := r.CancelEnrollToken("t2", "e1", id); err != ErrUnknownKey {
+		t.Fatalf("cross-workspace cancel: want ErrUnknownKey, got %v", err)
+	}
+	if err := r.CancelEnrollToken("t1", "e2", id); err != ErrUnknownKey {
+		t.Fatalf("cross-engagement cancel: want ErrUnknownKey, got %v", err)
+	}
+	if got := r.ListEnrollTokens("t1", "e1"); len(got) != 1 {
+		t.Fatalf("a refused cancel must leave the key usable, got %+v", got)
+	}
+	if err := r.CancelEnrollToken("t1", "e1", id); err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
 	if got := r.ListEnrollTokens("t1", "e1"); len(got) != 0 {
