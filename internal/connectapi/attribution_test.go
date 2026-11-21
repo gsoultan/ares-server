@@ -146,3 +146,23 @@ func TestCancelAgentKeyIsScopedToItsEngagement(t *testing.T) {
 		t.Fatalf("own cancel: %v", err)
 	}
 }
+
+// The consent controls (merged after this change was written) follow the same
+// rule: a manager changing the test intensity is named from the session.
+func TestTestIntensityActorIsTheSignedInAccount(t *testing.T) {
+	h := newTestHandler(t)
+	engID := authorizedEngagement(t, h)
+	ctx := auth.WithSession(context.Background(), auth.Session{
+		UserID: "u-admin", TenantID: engagement.ResolveTenant(""), Role: auth.RoleAdmin, Email: "lead@example.com",
+	})
+	if _, err := h.SetTestIntensity(ctx, connect.NewRequest(&aresv1.SetTestIntensityRequest{
+		EngagementId: engID, Level: 2, Actor: "the-ciso",
+	})); err != nil {
+		t.Fatalf("SetTestIntensity: %v", err)
+	}
+	eng, _ := h.store.Get(engID)
+	entries := eng.Audit.Entries()
+	if last := entries[len(entries)-1]; last.Action != "intensity-set" || last.Actor != "lead@example.com" {
+		t.Fatalf("last entry = %+v, want intensity-set by the signed-in account", last)
+	}
+}
