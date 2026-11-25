@@ -84,7 +84,8 @@ type AdviseRequest struct {
 
 	TenantId     string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	EngagementId string `protobuf:"bytes,2,opt,name=engagement_id,json=engagementId,proto3" json:"engagement_id,omitempty"`
-	// feature: explain-finding | suggest-checks | narrate-paths | draft-report
+	// feature: explain-finding | suggest-checks | narrate-paths | draft-report |
+	// plan-next
 	Feature string `protobuf:"bytes,3,opt,name=feature,proto3" json:"feature,omitempty"`
 	// finding_id is required for the explain-finding feature.
 	FindingId string `protobuf:"bytes,4,opt,name=finding_id,json=findingId,proto3" json:"finding_id,omitempty"`

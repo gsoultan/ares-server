@@ -32,7 +32,8 @@ export type AdviseRequest = Message<"ares.v1.AdviseRequest"> & {
   engagementId: string;
 
   /**
-   * feature: explain-finding | suggest-checks | narrate-paths | draft-report
+   * feature: explain-finding | suggest-checks | narrate-paths | draft-report |
+   * plan-next
    *
    * @generated from field: string feature = 3;
    */
