@@ -328,7 +328,7 @@ func (h *Handler) DispatchJob(ctx context.Context, req *connect.Request[aresv1.D
 	jobID := uuid.NewV7()
 	// The consent gate: the engagement's test intensity, and for an intrusive
 	// test a usable approval per target, reserved for this job.
-	if err := h.consentPrecheck(eng, req.Msg.GetModule(), targets, jobID); err != nil {
+	if err := h.consentPrecheck(eng, req.Msg.GetModule(), params, targets, jobID); err != nil {
 		return nil, err
 	}
 	if err := h.queue.TryEnqueue(queue.Job{

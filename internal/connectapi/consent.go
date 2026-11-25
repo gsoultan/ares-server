@@ -9,6 +9,7 @@ package connectapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -227,8 +228,11 @@ func (h *Handler) StopJob(ctx context.Context, req *connect.Request[aresv1.StopJ
 // once why a test cannot run. For an intrusive test it reserves the approvals
 // for the job id the worker will run under; the worker's own gate then accepts
 // the same reservation.
-func (h *Handler) consentPrecheck(eng *engagement.Engagement, mod string, targets []module.Target, jobID string) error {
-	level := technique.LevelOf(h.reg, mod)
+func (h *Handler) consentPrecheck(eng *engagement.Engagement, mod string, params json.RawMessage, targets []module.Target, jobID string) error {
+	level, err := technique.LevelForJob(h.reg, mod, params)
+	if err != nil {
+		return connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	if level <= module.LevelSafeProof {
 		return nil
 	}

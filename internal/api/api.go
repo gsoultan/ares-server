@@ -340,7 +340,12 @@ func (s *Server) dispatchJob(w http.ResponseWriter, r *http.Request) {
 	body.Actor = auth.Actor(r.Context(), body.Actor, "operator")
 	// The consent gate, as on the control plane. This REST surface takes no
 	// approvals, so an intrusive test is refused here; the worker re-checks.
-	if level := technique.LevelOf(s.reg, body.Module); level > module.LevelSafeProof {
+	level, err := technique.LevelForJob(s.reg, body.Module, body.Params)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if level > module.LevelSafeProof {
 		if level > eng.TestLevel() {
 			writeError(w, http.StatusForbidden, engagement.ErrAboveIntensity.Error())
 			return

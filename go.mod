@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	connectrpc.com/connect v1.21.1
 	github.com/asdine/storm/v3 v3.2.1
-	github.com/gsoultan/ares v0.0.0-20261117124725-19154b8c02b9
+	github.com/gsoultan/ares v0.0.0-20261121095234-17052ecfd0b8
 	github.com/gsoultan/storm v1.12.2
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/klauspost/compress v1.19.0
