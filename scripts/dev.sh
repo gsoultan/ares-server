@@ -1,24 +1,33 @@
 #!/usr/bin/env bash
 # Run the whole Ares stack locally with one command: the Go control plane, the
-# web UI, a deliberately weak practice target on loopback, and (on a Mac with
-# Apple's `container` CLI) a PostgreSQL container on its own port. Ctrl-C stops
-# everything this script started.
+# web UI, a deliberately weak practice target on loopback, a demo agent enrolled
+# to the demo engagement, and (when a container runtime is available) a
+# PostgreSQL container on its own port. Ctrl-C stops everything this script
+# started.
 #
-#   scripts/dev.sh            seeded demo: skips /setup, sign in as
-#                             admin@northwind.db / admin, sample engagement and
-#                             findings ready. Data persists in .dev/
-#   scripts/dev.sh --fresh    same, but wipe .dev/ first and reseed
-#   scripts/dev.sh --setup    clean in-memory run that lands on the /setup wizard
-#   scripts/dev.sh --no-pg    do not start the PostgreSQL container
+#   scripts/dev.sh              seeded demo: skips /setup, sign in as
+#                               admin@northwind.db / admin, sample engagement,
+#                               findings and a connected agent ready. Data
+#                               persists in .dev/ (embedded file store)
+#   scripts/dev.sh --postgres   the same seeded demo, stored in the dev
+#                               PostgreSQL container instead (scripts/postgres.sh)
+#   scripts/dev.sh --fresh      wipe the demo data first and reseed (works with
+#                               --postgres too: it empties that database)
+#   scripts/dev.sh --setup      clean in-memory run that lands on the /setup wizard
+#   scripts/dev.sh --no-agent   do not start the demo agent
+#   scripts/dev.sh --no-pg      do not start the PostgreSQL container
+#   scripts/dev.sh --rerun-jobs dispatch the sample jobs again on a seeded store
 #
-# Environment (all optional):
+# Settings can also come from a .dev.env file in the repo root (copy
+# scripts/dev.env.example). Environment (all optional):
 #   ARES_ADDR       control-plane listen address        (default :8080)
 #   WEB_PORT        web dev-server port                 (default 5173)
 #   PRACTICE_ADDR   practice target, loopback only      (default 127.0.0.1:8089)
-#   DEV_DIR         where the seeded database and key live (default .dev)
+#   DEV_DIR         where the seeded database, key and agent state live (default .dev)
 #   DEV_EMAIL / DEV_PASSWORD   demo super-admin         (default admin@northwind.db / admin)
 #   ARES_PG         auto | on | off — the Postgres container (default auto: on
-#                   when Apple's `container` CLI is installed)
+#                   when Apple's `container` CLI is installed; --postgres forces on)
+#   ARES_PG_RUNTIME auto | container | docker (see scripts/postgres.sh)
 #   ARES_PG_PORT    Postgres host port                  (default 55433)
 #
 # The demo credential is weak on purpose and only ever written by this script's
@@ -30,14 +39,27 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# Optional local settings (gitignored), loaded before the flags so a flag wins.
+if [ -f "$ROOT/.dev.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$ROOT/.dev.env"
+  set +a
+fi
+
 MODE=demo
 FRESH=0
+STORE=file
+RERUN=0
 for arg in "$@"; do
   case "$arg" in
     --setup) MODE=setup ;;
     --fresh) FRESH=1 ;;
+    --postgres|--pg) STORE=postgres ;;
     --no-pg) ARES_PG=off ;;
-    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+    --no-agent) DEV_AGENT=off ;;
+    --rerun-jobs) RERUN=1 ;;
+    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
     *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -49,6 +71,20 @@ done
 : "${DEV_EMAIL:=admin@northwind.db}"
 : "${DEV_PASSWORD:=admin}"
 : "${ARES_PG:=auto}"
+: "${DEV_AGENT:=on}"
+
+if [ "$STORE" = postgres ]; then
+  if [ "$MODE" = setup ]; then
+    echo "--postgres and --setup do not mix: --setup is an in-memory first run." >&2
+    exit 2
+  fi
+  if [ "$ARES_PG" = off ]; then
+    echo "--postgres needs the PostgreSQL container; drop --no-pg (or ARES_PG=off)." >&2
+    exit 2
+  fi
+  ARES_PG=on
+fi
+[ "$MODE" = setup ] && DEV_AGENT=off
 
 PORT="${ARES_ADDR##*:}"
 API="http://127.0.0.1:${PORT}"
@@ -93,27 +129,34 @@ trap 'exit 130' INT TERM   # exiting runs the EXIT trap, which cleans up once
 
 # Build once and run the binaries directly: `go run` would leave the compiled
 # server orphaned on Ctrl-C because it does not forward the signal to its child.
-echo "==> building control plane, seeder and practice target…"
+echo "==> building the Go binaries…"
 go build -o "$BIN_DIR/ares-server" ./cmd/ares-server
 go build -o "$BIN_DIR/ares-devseed" ./cmd/ares-devseed
 go build -o "$BIN_DIR/ares-practice" ./cmd/ares-practice
+if [ "$DEV_AGENT" = on ]; then
+  go build -o "$BIN_DIR/ares-agent" ./cmd/ares-agent
+fi
 
-# ---- PostgreSQL (Apple container, staged) ------------------------------------
+# ---- PostgreSQL (container) ---------------------------------------------------
+# On by default only with Apple's `container` CLI (it is light and starts on
+# demand); with Docker it starts when asked: --postgres or ARES_PG=on.
 PG_STARTED=0
-if [ "$ARES_PG" != off ]; then
-  if command -v container >/dev/null 2>&1; then
-    if scripts/postgres.sh up; then
-      PG_STARTED=1
-      ARES_PG_URL="$(scripts/postgres.sh url)"
-      export ARES_PG_URL
-      echo "    note: Ares still stores its data in the embedded file store; PostgreSQL is"
-      echo "          staged for the upcoming Postgres backend and is not used by the app yet."
-    else
-      echo "    PostgreSQL did not start; carrying on without it (the app does not need it yet)."
-    fi
-  elif [ "$ARES_PG" = on ]; then
-    echo "ARES_PG=on but Apple's 'container' CLI is not installed." >&2
+pg_wanted=0
+if [ "$ARES_PG" = on ]; then
+  pg_wanted=1
+elif [ "$ARES_PG" = auto ] && command -v container >/dev/null 2>&1; then
+  pg_wanted=1
+fi
+if [ "$pg_wanted" = 1 ]; then
+  if scripts/postgres.sh up; then
+    PG_STARTED=1
+    ARES_PG_URL="$(scripts/postgres.sh url)"
+    export ARES_PG_URL
+  elif [ "$STORE" = postgres ] || [ "$ARES_PG" = on ]; then
+    echo "PostgreSQL did not start (see above); it is needed for this run." >&2
     exit 1
+  else
+    echo "    PostgreSQL did not start; carrying on without it (the file-store demo does not need it)."
   fi
 fi
 
@@ -125,15 +168,31 @@ if [ "$MODE" = setup ]; then
   export ARES_KEY_FILE="$BIN_DIR/ares.key"
   unset ARES_MASTER_KEY || true
 else
-  if [ "$FRESH" = 1 ] && [ -d "$DEV_DIR" ]; then
-    echo "==> --fresh: removing $DEV_DIR"
-    rm -rf "$DEV_DIR"
+  # Each store keeps its own master key, so wiping one demo never leaves the
+  # other with settings sealed under a key that no longer exists.
+  if [ "$STORE" = postgres ]; then
+    STORE_DIR="$DEV_DIR/postgres"
+  else
+    STORE_DIR="$DEV_DIR"
   fi
-  mkdir -p "$DEV_DIR"
-  export ARES_DB="$DEV_DIR/ares.db"
-  export ARES_KEY_FILE="$DEV_DIR/ares.key"
+  if [ "$FRESH" = 1 ]; then
+    echo "==> --fresh: removing the $STORE demo's data"
+    if [ "$STORE" = postgres ]; then
+      rm -rf "$STORE_DIR"
+      scripts/postgres.sh reset
+    else
+      rm -f "$DEV_DIR/ares.db" "$DEV_DIR/ares.key"
+    fi
+  fi
+  mkdir -p "$STORE_DIR"
+  if [ "$STORE" = postgres ]; then
+    export ARES_DB="$ARES_PG_URL"
+  else
+    export ARES_DB="$DEV_DIR/ares.db"
+  fi
+  export ARES_KEY_FILE="$STORE_DIR/ares.key"
   unset ARES_MASTER_KEY || true
-  echo "==> seeding $ARES_DB (skipped if already seeded)"
+  echo "==> seeding the $STORE store (skipped if already seeded)"
   "$BIN_DIR/ares-devseed" prepare -db "$ARES_DB" -key "$ARES_KEY_FILE" \
     -email "$DEV_EMAIL" -password "$DEV_PASSWORD"
 fi
@@ -143,7 +202,11 @@ echo "==> practice target  http://${PRACTICE_ADDR}   (deliberately weak, loopbac
 "$BIN_DIR/ares-practice" -addr "$PRACTICE_ADDR" &
 pids="$pids $!"
 
-echo "==> control plane    $API   (ARES_DB=$ARES_DB)"
+if [ "$STORE" = postgres ]; then
+  echo "==> control plane    $API   (store: PostgreSQL on 127.0.0.1:${ARES_PG_PORT:-55433})"
+else
+  echo "==> control plane    $API   (ARES_DB=$ARES_DB)"
+fi
 "$BIN_DIR/ares-server" &
 pids="$pids $!"
 
@@ -162,9 +225,33 @@ fi
 
 if [ "$MODE" = demo ]; then
   echo "==> loading the demo engagement and sample jobs"
+  rerun_flag=""
+  [ "$RERUN" = 1 ] && rerun_flag="-rerun"
+  # shellcheck disable=SC2086
   "$BIN_DIR/ares-devseed" populate -api "$API" -email "$DEV_EMAIL" -password "$DEV_PASSWORD" \
-    -target "http://${PRACTICE_ADDR}" -samples "$ROOT/samples" \
+    -target "http://${PRACTICE_ADDR}" -samples "$ROOT/samples" $rerun_flag \
     || echo "    (demo jobs could not be loaded; the app still works)"
+fi
+
+AGENT_UP=0
+if [ "$DEV_AGENT" = on ]; then
+  # The server keeps enrolled agents in memory, so the demo agent enrolls
+  # afresh on every start with a new one-time install key.
+  AGENT_STATE="$DEV_DIR/agent"
+  rm -rf "$AGENT_STATE"
+  echo "==> demo agent       enrolling to the demo engagement (loopback, safe checks only)"
+  if key="$("$BIN_DIR/ares-devseed" agent-key -api "$API" -email "$DEV_EMAIL" -password "$DEV_PASSWORD")" \
+     && "$BIN_DIR/ares-agent" enroll --server "$API" --key "$key" --state "$AGENT_STATE"; then
+    "$BIN_DIR/ares-agent" run --state "$AGENT_STATE" &
+    pids="$pids $!"
+    AGENT_UP=1
+    "$BIN_DIR/ares-devseed" agent-job -api "$API" -email "$DEV_EMAIL" -password "$DEV_PASSWORD" \
+      -target "http://${PRACTICE_ADDR}" \
+      || echo "    (no agent jobs were dispatched; the agent is still connected)"
+  else
+    echo "    (the demo agent could not enroll; carrying on without it)"
+  fi
+  unset key
 fi
 
 echo "==> web UI           http://127.0.0.1:${WEB_PORT}"
@@ -177,11 +264,19 @@ echo "  Ares is running:  http://127.0.0.1:${WEB_PORT}"
 if [ "$MODE" = demo ]; then
   echo "  Sign in:          $DEV_EMAIL  /  $DEV_PASSWORD   (dev only)"
   echo "  Demo engagement:  Northwind practice lab (scoped to 127.0.0.1)"
+  if [ "$STORE" = postgres ]; then
+    echo "  Datastore:        PostgreSQL (scripts/postgres.sh psql to look inside)"
+  else
+    echo "  Datastore:        $ARES_DB"
+  fi
+  if [ "$AGENT_UP" = 1 ]; then
+    echo "  Demo agent:       connected (state in $AGENT_STATE; see the Agents page)"
+  fi
 else
   echo "  First run:        the app opens on /setup (in-memory; nothing is kept)"
 fi
-if [ "$PG_STARTED" = 1 ]; then
-  echo "  PostgreSQL:       ${ARES_PG_URL}  (staged, not used yet)"
+if [ "$PG_STARTED" = 1 ] && [ "$STORE" != postgres ]; then
+  echo "  PostgreSQL:       running on 127.0.0.1:${ARES_PG_PORT:-55433} (not used by this run; try --postgres)"
 fi
 echo "  Press Ctrl-C to stop."
 echo "────────────────────────────────────────────────────────────"
