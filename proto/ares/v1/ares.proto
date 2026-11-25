@@ -141,7 +141,8 @@ service ControlPlane {
 message AdviseRequest {
   string tenant_id = 1;
   string engagement_id = 2;
-  // feature: explain-finding | suggest-checks | narrate-paths | draft-report
+  // feature: explain-finding | suggest-checks | narrate-paths | draft-report |
+  // plan-next
   string feature = 3;
   // finding_id is required for the explain-finding feature.
   string finding_id = 4;
