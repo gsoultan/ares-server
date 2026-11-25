@@ -23,6 +23,8 @@ func (r Report) Markdown() []byte {
 	fmt.Fprintf(&b, "# Security assessment — %s\n\n", r.Meta.EngagementName)
 	fmt.Fprintf(&b, "_Generated %s_\n\n", r.Generated.Format(time.RFC3339))
 
+	writeBlocksMarkdown(&b, r.ownerBlocks())
+
 	b.WriteString("## Engagement\n\n")
 	fmt.Fprintf(&b, "- **Workspace:** %s\n", orNA(r.Meta.Workspace))
 	fmt.Fprintf(&b, "- **Engagement:** %s (`%s`)\n", r.Meta.EngagementName, r.Meta.EngagementID)
@@ -60,6 +62,7 @@ func (r Report) Markdown() []byte {
 			fmt.Fprintf(&b, "- **ATT&CK:** %s\n", f.Technique)
 		}
 		b.WriteString("\n")
+		writeBlocksMarkdown(&b, f.findingBlocks())
 		if f.Description != "" {
 			fmt.Fprintf(&b, "**What it means:** %s\n\n", f.Description)
 		}
@@ -88,6 +91,33 @@ func (r Report) Markdown() []byte {
 	return []byte(b.String())
 }
 
+// writeBlocksMarkdown renders the shared owner-facing blocks.
+func writeBlocksMarkdown(b *strings.Builder, bs []block) {
+	inList := false
+	for _, bl := range bs {
+		if inList && bl.kind != bBullet {
+			b.WriteString("\n")
+			inList = false
+		}
+		switch bl.kind {
+		case bH2:
+			fmt.Fprintf(b, "## %s\n\n", bl.text)
+		case bH3:
+			fmt.Fprintf(b, "### %s\n\n", bl.text)
+		case bPara:
+			fmt.Fprintf(b, "%s\n\n", bl.text)
+		case bLabel:
+			fmt.Fprintf(b, "**%s:** %s\n\n", bl.label, bl.text)
+		case bBullet:
+			fmt.Fprintf(b, "- %s\n", bl.text)
+			inList = true
+		}
+	}
+	if inList {
+		b.WriteString("\n")
+	}
+}
+
 // writeEvidenceMarkdown renders the forensic chain-of-custody section: the
 // artifacts ingested, their hashes, and the integrity of the audit trail that
 // anchors them. It renders only when evidence was ingested.
@@ -113,7 +143,7 @@ func writeRiskMarkdown(b *strings.Builder, risk intel.RiskPicture) {
 		return
 	}
 	b.WriteString("## Risk picture — prioritized attack paths\n\n")
-	fmt.Fprintf(b, "**Overall risk: %s (score %d/100).** Ares correlated the findings into %d attack path(s), most urgent first — rather than a flat list.\n\n",
+	fmt.Fprintf(b, "**Overall risk: %s (top path priority %d/100).** Ares correlated the findings into %d attack path(s), most urgent first — rather than a flat list.\n\n",
 		strings.ToUpper(risk.Rating), risk.Score, len(risk.Paths))
 	for i, p := range risk.Paths {
 		fmt.Fprintf(b, "### %d. [%s] %s — priority %d/100\n\n", i+1, strings.ToUpper(p.Severity), p.Name, p.Priority)

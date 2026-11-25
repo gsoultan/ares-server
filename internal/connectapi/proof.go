@@ -192,6 +192,7 @@ func (h *Handler) RecheckFinding(ctx context.Context, req *connect.Request[aresv
 		Actor:        actor,
 		Targets:      []module.Target{rc.Target},
 		Params:       rc.Params,
+		Recheck:      &queue.Recheck{FindingID: req.Msg.GetFindingId(), Claim: proof.Claim},
 	}); err != nil {
 		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("job queue is full, try again shortly"))
 	}

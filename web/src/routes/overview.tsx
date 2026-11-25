@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Box, Card, Group, Progress, SimpleGrid, Stack, Text } from "@mantine/core";
-import { IconCircleCheck, IconShieldSearch } from "@tabler/icons-react";
+import { IconCircleCheck, IconShieldCheck, IconShieldSearch } from "@tabler/icons-react";
 import { useQueries } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { control } from "../client.ts";
@@ -25,10 +25,13 @@ import {
 } from "../ui/index.tsx";
 import { SeverityCounts } from "../features/findings/SeverityCounts.tsx";
 import { NewEngagement } from "../features/workspace/NewEngagement.tsx";
+import { RiskTrend } from "../features/workspace/RiskTrend.tsx";
 import {
   findingState,
+  fixProof,
   findingStateInfo,
   isUnresolved,
+  type FindingRecord,
   useCoverage,
   useEngagements,
   useFindings,
@@ -271,6 +274,58 @@ export function OverviewPage() {
         </Section>
       </SimpleGrid>
 
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg" style={{ alignItems: "start" }}>
+        <RiskTrend />
+
+        <Section
+          title="Proven fixed"
+          description="Fixed, then tested again: the problem no longer comes back."
+          aside={
+            rechecked.length > 3 ? (
+              <Link to="/findings" className="ares-link">
+                See all {rechecked.length}
+              </Link>
+            ) : undefined
+          }
+        >
+          {rechecked.length === 0 ? (
+            <EmptyState
+              icon={<IconShieldCheck size={22} />}
+              title="No proven fixes yet"
+              description="Fix a finding, then re-check it. When the test no longer finds it, it shows here as proof."
+            />
+          ) : (
+            <Box>
+              {[...rechecked]
+                .sort((a, b) => provenAt(b).localeCompare(provenAt(a)))
+                .slice(0, 3)
+                .map((f) => (
+                  <Link
+                    key={f.id}
+                    to="/engagements/$id"
+                    params={{ id: f.engagementId }}
+                    search={{ view: "findings", finding: f.id }}
+                    className="ares-clickable"
+                    style={{ display: "block", color: "inherit", textDecoration: "none" }}
+                  >
+                    <Row>
+                      <SeverityBadge severity={f.finding.severity} />
+                      <Box style={{ flex: 1, minWidth: 0 }}>
+                        <Text fw={600} truncate>
+                          {f.finding.title}
+                        </Text>
+                        <Text size="sm" c="dimmed">
+                          {fixProof(f)}
+                        </Text>
+                      </Box>
+                    </Row>
+                  </Link>
+                ))}
+            </Box>
+          )}
+        </Section>
+      </SimpleGrid>
+
       <Section
         title="Recent activity"
         aside={
@@ -308,6 +363,12 @@ export function OverviewPage() {
       </Section>
     </Stack>
   );
+}
+
+// provenAt orders proven fixes newest first: the latest re-check, else when
+// the finding was first found.
+function provenAt(f: FindingRecord): string {
+  return f.proofChecks[0]?.at ?? f.foundAt;
 }
 
 function Row({ children }: { children: ReactNode }) {

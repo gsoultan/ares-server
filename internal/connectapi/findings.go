@@ -9,8 +9,6 @@ package connectapi
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"sort"
 	"sync"
@@ -22,6 +20,7 @@ import (
 	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
+	"github.com/gsoultan/ares-server/internal/report"
 	"github.com/gsoultan/ares-server/internal/worker"
 )
 
@@ -291,11 +290,10 @@ func (h *Handler) cachedFindings(key string, engIDs []string, engName map[string
 	}).([]*aresv1.Finding)
 }
 
-// findingKey is a finding's stable identity across runs: the engagement, the
-// module that raised it, its technique, title and target.
+// findingKey is a finding's stable identity across runs; the report package
+// owns it so the app and the exported report agree on every id.
 func findingKey(engID, module, technique, title, target string) string {
-	sum := sha256.Sum256([]byte(engID + "\x00" + module + "\x00" + technique + "\x00" + title + "\x00" + target))
-	return hex.EncodeToString(sum[:16]) // 128-bit id
+	return report.FindingKey(engID, module, technique, title, target)
 }
 
 // collectFindings aggregates the findings across a set of engagements:
@@ -383,9 +381,32 @@ func (h *Handler) collectFindings(engIDs []string, engName map[string]string) []
 		}
 	}
 
+	// Every finished re-check of a finding's proof, from the re-check jobs'
+	// own outcomes. Only outcomes of the caller's engagements are read, and a
+	// re-check attaches only to a finding of the engagement it ran in, so the
+	// history never crosses workspaces.
+	for _, o := range outcomes {
+		rc := o.Recheck
+		if rc == nil || o.Running() {
+			continue
+		}
+		a, ok := byID[rc.FindingID]
+		if !ok || a.f.GetEngagementId() != o.Engagement {
+			continue
+		}
+		a.f.Rechecks = append(a.f.Rechecks, &aresv1.ProofCheck{
+			At:          rfc(o.FinishedAt),
+			Reproduced:  rc.Reproduced,
+			Fingerprint: rc.Fingerprint,
+			JobId:       o.JobID,
+		})
+	}
+
 	out := make([]*aresv1.Finding, 0, len(order))
 	for _, id := range order {
 		a := byID[id]
+		// Newest re-check first, as the proto documents.
+		sort.SliceStable(a.f.Rechecks, func(i, j int) bool { return a.f.Rechecks[i].GetAt() > a.f.Rechecks[j].GetAt() })
 		if lr, ok := latestRun[a.module+"\x00"+a.target]; ok && lr.After(a.lastSeen) {
 			a.f.StillPresent = false
 		} else {
@@ -398,30 +419,5 @@ func (h *Handler) collectFindings(engIDs []string, engName map[string]string) []
 	return out
 }
 
-// ranModuleTargets returns the set of "module\x00target" pairs a job exercised,
-// used to decide whether a later run re-checked a finding's module and target.
-// It covers direct dispatch (the job's own module over its allowed targets),
-// any module that produced a result, and — for an auto-run recon job — the
-// sub-checks it ran, which recon records in its "planned" note even when they
-// found nothing.
-func ranModuleTargets(o worker.Outcome) map[string]bool {
-	set := map[string]bool{}
-	if o.Module != "" && o.Module != "recon" {
-		for _, t := range o.Allowed {
-			set[o.Module+"\x00"+t.String()] = true
-		}
-	}
-	for _, r := range o.Results {
-		set[r.Capability+"\x00"+r.Target.String()] = true
-		if r.Capability == "recon" && r.Kind == "info" {
-			planned, _ := r.Data["planned"].([]any)
-			tgt := r.Target.String()
-			for _, p := range planned {
-				if name, ok := p.(string); ok {
-					set[name+"\x00"+tgt] = true
-				}
-			}
-		}
-	}
-	return set
-}
+// ranModuleTargets returns the set of "module\x00target" pairs a job exercised.
+func ranModuleTargets(o worker.Outcome) map[string]bool { return report.RanModuleTargets(o) }

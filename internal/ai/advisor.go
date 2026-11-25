@@ -67,11 +67,12 @@ const (
 	FeatureSuggestChecks  = "suggest-checks"
 	FeatureNarratePaths   = "narrate-paths"
 	FeatureDraftReport    = "draft-report"
+	FeaturePlanNext       = "plan-next"
 )
 
 // Features lists the advisory features this layer offers.
 func Features() []string {
-	return []string{FeatureExplainFinding, FeatureSuggestChecks, FeatureNarratePaths, FeatureDraftReport, FeatureDraftModule}
+	return []string{FeatureExplainFinding, FeatureSuggestChecks, FeatureNarratePaths, FeatureDraftReport, FeaturePlanNext, FeatureDraftModule}
 }
 
 // ---- Input types (plain data; the API handler maps Ares types into these) ----
@@ -138,6 +139,22 @@ type ReportInput struct {
 	Findings   []FindingInput `json:"findings,omitempty"`
 }
 
+// NextMoveInput is everything the advisor needs to reason about an attacker's
+// next moves: what Ares has proven, what it only observed, the correlated attack
+// paths, and what has already run. Proven findings are kept apart from observed
+// ones so the advisor grounds the highest-priority moves in reproducible proof.
+type NextMoveInput struct {
+	Engagement string         `json:"engagement,omitempty"`
+	Target     string         `json:"target,omitempty"`
+	Score      int            `json:"score,omitempty"`
+	Rating     string         `json:"rating,omitempty"`
+	Proven     []FindingInput `json:"proven,omitempty"`
+	Observed   []FindingInput `json:"observed,omitempty"`
+	RanModules []string       `json:"ranModules,omitempty"`
+	Techniques []string       `json:"techniques,omitempty"`
+	Paths      []PathInput    `json:"paths,omitempty"`
+}
+
 // ---- Features ----
 
 // ExplainFinding returns a plain-language explanation of one finding: what it
@@ -183,6 +200,25 @@ func (a *Advisor) DraftReportNarrative(ctx context.Context, r ReportInput) (Resp
 	return a.complete(ctx, prompt)
 }
 
+// PlanNextMoves reasons over what Ares has proven, observed and already run and
+// lays out the adversary's most likely next moves as a prioritized kill-chain,
+// each mapped to an Ares module, an ATT&CK technique and the consent level it
+// needs. It is strictly advisory: it proposes the plan, and the operator still
+// adds any new target to scope, authorizes the level, and dispatches each step.
+func (a *Advisor) PlanNextMoves(ctx context.Context, in NextMoveInput) (Response, error) {
+	prompt := "You are given everything Ares has proven, only observed, and already run against this engagement. " +
+		"Lay out the adversary's most likely next moves as a short, prioritized kill-chain of three to six steps. " +
+		"For each step give, as a tight bullet: (1) the attacker's goal in one line; " +
+		"(2) the specific weakness it builds on, citing the proven or observed finding by title — never rely on a finding that is not listed below; " +
+		"(3) the single Ares module that would safely confirm the step and the ATT&CK technique it exercises; " +
+		"(4) the consent level it needs — safe-proof, active-confirmation (per-engagement opt-in) or intrusive (a named per-target operator approval). " +
+		"Order the steps so that moves unlocked by an already-proven finding come first. " +
+		"When a step would need a host or target that is not already listed as in scope, say so plainly. " +
+		"Close with one line making clear that Ares runs nothing from this plan on its own: the operator adds any new target to scope, authorizes the consent level, and dispatches each step.\n\n" +
+		"Engagement data:\n" + asJSON(in)
+	return a.complete(ctx, prompt)
+}
+
 func (a *Advisor) complete(ctx context.Context, prompt string) (Response, error) {
 	return a.p.Complete(ctx, Request{
 		System:    advisorSystem,
@@ -219,6 +255,12 @@ func (a *Advisor) Advise(ctx context.Context, feature string, payload json.RawMe
 			return Response{}, err
 		}
 		return a.DraftReportNarrative(ctx, r)
+	case FeaturePlanNext:
+		var in NextMoveInput
+		if err := unmarshalPayload(payload, &in); err != nil {
+			return Response{}, err
+		}
+		return a.PlanNextMoves(ctx, in)
 	case FeatureDraftModule:
 		var in ModuleDraftInput
 		if err := unmarshalPayload(payload, &in); err != nil {

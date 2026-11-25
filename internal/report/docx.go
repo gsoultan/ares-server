@@ -67,6 +67,25 @@ func (r Report) DOCX() ([]byte, error) {
 	heading(fmt.Sprintf("Security assessment — %s", r.Meta.EngagementName), 36)
 	para(fmt.Sprintf("Generated %s", r.Generated.Format(time.RFC3339)))
 
+	// renderBlocks writes the shared owner-facing blocks.
+	renderBlocks := func(bs []block) {
+		for _, bl := range bs {
+			switch bl.kind {
+			case bH2:
+				heading(bl.text, 28)
+			case bH3:
+				heading(bl.text, 22)
+			case bPara:
+				para(bl.text)
+			case bLabel:
+				labelled(bl.label+":", bl.text)
+			case bBullet:
+				para("• " + bl.text)
+			}
+		}
+	}
+	renderBlocks(r.ownerBlocks())
+
 	heading("Engagement", 28)
 	labelled("Workspace:", orNA(r.Meta.Workspace))
 	labelled("Engagement:", fmt.Sprintf("%s (%s)", r.Meta.EngagementName, r.Meta.EngagementID))
@@ -87,7 +106,7 @@ func (r Report) DOCX() ([]byte, error) {
 
 	if len(r.Risk.Paths) > 0 {
 		heading("Risk picture — prioritized attack paths", 28)
-		para(fmt.Sprintf("Overall risk: %s (score %d/100). Ares correlated the findings into %d attack path(s), most urgent first.",
+		para(fmt.Sprintf("Overall risk: %s (top path priority %d/100). Ares correlated the findings into %d attack path(s), most urgent first.",
 			strings.ToUpper(r.Risk.Rating), r.Risk.Score, len(r.Risk.Paths)))
 		for i, p := range r.Risk.Paths {
 			heading(fmt.Sprintf("%d. [%s] %s — priority %d/100", i+1, strings.ToUpper(p.Severity), p.Name, p.Priority), 22)
@@ -110,6 +129,7 @@ func (r Report) DOCX() ([]byte, error) {
 	}
 	for i, f := range r.Findings {
 		heading(fmt.Sprintf("%d. [%s] %s", i+1, strings.ToUpper(f.Severity), f.Title), 24)
+		renderBlocks(f.findingBlocks())
 		if f.URL != "" {
 			labelled("URL:", f.URL)
 		}
