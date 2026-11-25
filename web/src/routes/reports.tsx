@@ -18,8 +18,11 @@ const route = getRouteApi("/reports");
 const FORMATS: Record<string, string> = { pdf: "PDF", docx: "Word" };
 
 const CONTENTS = [
-  { title: "Summary", detail: "What was tested, when, and who approved it." },
-  { title: "What we found", detail: "Each finding with what it means and how to fix it." },
+  { title: "Summary", detail: "What is still open, what is proven fixed, and the risk score now and after the first test." },
+  { title: "Fix these first", detail: "The most serious open findings, each in one plain sentence with its first step." },
+  { title: "Proven fixed", detail: "Each fix Ares tested again, with the date the problem stopped coming back." },
+  { title: "Risk over time", detail: "The risk score after each test, so improvement is visible." },
+  { title: "What we found", detail: "Each finding in full: what it means, how to fix it, and its proof." },
   { title: "What your defenders noticed", detail: "Blocked, alerted, logged only or missed, per technique." },
   { title: "Activity log", detail: "The complete, tamper-evident record of what was done." },
 ];

@@ -90,6 +90,9 @@ const (
 	// ControlPlaneGetRiskPictureProcedure is the fully-qualified name of the ControlPlane's
 	// GetRiskPicture RPC.
 	ControlPlaneGetRiskPictureProcedure = "/ares.v1.ControlPlane/GetRiskPicture"
+	// ControlPlaneGetRiskTrendProcedure is the fully-qualified name of the ControlPlane's GetRiskTrend
+	// RPC.
+	ControlPlaneGetRiskTrendProcedure = "/ares.v1.ControlPlane/GetRiskTrend"
 	// ControlPlaneListPurpleTemplatesProcedure is the fully-qualified name of the ControlPlane's
 	// ListPurpleTemplates RPC.
 	ControlPlaneListPurpleTemplatesProcedure = "/ares.v1.ControlPlane/ListPurpleTemplates"
@@ -195,6 +198,7 @@ var (
 	controlPlaneGetDetectionSummaryMethodDescriptor    = controlPlaneServiceDescriptor.Methods().ByName("GetDetectionSummary")
 	controlPlaneSetDetectionMethodDescriptor           = controlPlaneServiceDescriptor.Methods().ByName("SetDetection")
 	controlPlaneGetRiskPictureMethodDescriptor         = controlPlaneServiceDescriptor.Methods().ByName("GetRiskPicture")
+	controlPlaneGetRiskTrendMethodDescriptor           = controlPlaneServiceDescriptor.Methods().ByName("GetRiskTrend")
 	controlPlaneListPurpleTemplatesMethodDescriptor    = controlPlaneServiceDescriptor.Methods().ByName("ListPurpleTemplates")
 	controlPlaneGetPurpleTemplateMethodDescriptor      = controlPlaneServiceDescriptor.Methods().ByName("GetPurpleTemplate")
 	controlPlaneAdviseMethodDescriptor                 = controlPlaneServiceDescriptor.Methods().ByName("Advise")
@@ -262,6 +266,10 @@ type ControlPlaneClient interface {
 	SetDetection(context.Context, *connect.Request[v1.SetDetectionRequest]) (*connect.Response[v1.DetectionSummary], error)
 	// GetRiskPicture correlates an engagement's findings into prioritized attack paths.
 	GetRiskPicture(context.Context, *connect.Request[v1.GetRiskPictureRequest]) (*connect.Response[v1.RiskPicture], error)
+	// GetRiskTrend returns the risk score after each finished run, oldest first,
+	// for one engagement or the whole workspace, so an owner sees whether things
+	// are improving across runs.
+	GetRiskTrend(context.Context, *connect.Request[v1.GetRiskTrendRequest]) (*connect.Response[v1.RiskTrend], error)
 	ListPurpleTemplates(context.Context, *connect.Request[v1.ListPurpleTemplatesRequest]) (*connect.Response[v1.ListPurpleTemplatesResponse], error)
 	GetPurpleTemplate(context.Context, *connect.Request[v1.GetPurpleTemplateRequest]) (*connect.Response[v1.PurpleTemplate], error)
 	// Advise returns grounded AI advisory text for an engagement. It is strictly
@@ -484,6 +492,12 @@ func NewControlPlaneClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(controlPlaneGetRiskPictureMethodDescriptor),
 			connect.WithClientOptions(opts...),
 		),
+		getRiskTrend: connect.NewClient[v1.GetRiskTrendRequest, v1.RiskTrend](
+			httpClient,
+			baseURL+ControlPlaneGetRiskTrendProcedure,
+			connect.WithSchema(controlPlaneGetRiskTrendMethodDescriptor),
+			connect.WithClientOptions(opts...),
+		),
 		listPurpleTemplates: connect.NewClient[v1.ListPurpleTemplatesRequest, v1.ListPurpleTemplatesResponse](
 			httpClient,
 			baseURL+ControlPlaneListPurpleTemplatesProcedure,
@@ -684,6 +698,7 @@ type controlPlaneClient struct {
 	getDetectionSummary    *connect.Client[v1.GetDetectionSummaryRequest, v1.DetectionSummary]
 	setDetection           *connect.Client[v1.SetDetectionRequest, v1.DetectionSummary]
 	getRiskPicture         *connect.Client[v1.GetRiskPictureRequest, v1.RiskPicture]
+	getRiskTrend           *connect.Client[v1.GetRiskTrendRequest, v1.RiskTrend]
 	listPurpleTemplates    *connect.Client[v1.ListPurpleTemplatesRequest, v1.ListPurpleTemplatesResponse]
 	getPurpleTemplate      *connect.Client[v1.GetPurpleTemplateRequest, v1.PurpleTemplate]
 	advise                 *connect.Client[v1.AdviseRequest, v1.AdviseResponse]
@@ -818,6 +833,11 @@ func (c *controlPlaneClient) SetDetection(ctx context.Context, req *connect.Requ
 // GetRiskPicture calls ares.v1.ControlPlane.GetRiskPicture.
 func (c *controlPlaneClient) GetRiskPicture(ctx context.Context, req *connect.Request[v1.GetRiskPictureRequest]) (*connect.Response[v1.RiskPicture], error) {
 	return c.getRiskPicture.CallUnary(ctx, req)
+}
+
+// GetRiskTrend calls ares.v1.ControlPlane.GetRiskTrend.
+func (c *controlPlaneClient) GetRiskTrend(ctx context.Context, req *connect.Request[v1.GetRiskTrendRequest]) (*connect.Response[v1.RiskTrend], error) {
+	return c.getRiskTrend.CallUnary(ctx, req)
 }
 
 // ListPurpleTemplates calls ares.v1.ControlPlane.ListPurpleTemplates.
@@ -1001,6 +1021,10 @@ type ControlPlaneHandler interface {
 	SetDetection(context.Context, *connect.Request[v1.SetDetectionRequest]) (*connect.Response[v1.DetectionSummary], error)
 	// GetRiskPicture correlates an engagement's findings into prioritized attack paths.
 	GetRiskPicture(context.Context, *connect.Request[v1.GetRiskPictureRequest]) (*connect.Response[v1.RiskPicture], error)
+	// GetRiskTrend returns the risk score after each finished run, oldest first,
+	// for one engagement or the whole workspace, so an owner sees whether things
+	// are improving across runs.
+	GetRiskTrend(context.Context, *connect.Request[v1.GetRiskTrendRequest]) (*connect.Response[v1.RiskTrend], error)
 	ListPurpleTemplates(context.Context, *connect.Request[v1.ListPurpleTemplatesRequest]) (*connect.Response[v1.ListPurpleTemplatesResponse], error)
 	GetPurpleTemplate(context.Context, *connect.Request[v1.GetPurpleTemplateRequest]) (*connect.Response[v1.PurpleTemplate], error)
 	// Advise returns grounded AI advisory text for an engagement. It is strictly
@@ -1217,6 +1241,12 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 		ControlPlaneGetRiskPictureProcedure,
 		svc.GetRiskPicture,
 		connect.WithSchema(controlPlaneGetRiskPictureMethodDescriptor),
+		connect.WithHandlerOptions(opts...),
+	)
+	controlPlaneGetRiskTrendHandler := connect.NewUnaryHandler(
+		ControlPlaneGetRiskTrendProcedure,
+		svc.GetRiskTrend,
+		connect.WithSchema(controlPlaneGetRiskTrendMethodDescriptor),
 		connect.WithHandlerOptions(opts...),
 	)
 	controlPlaneListPurpleTemplatesHandler := connect.NewUnaryHandler(
@@ -1437,6 +1467,8 @@ func NewControlPlaneHandler(svc ControlPlaneHandler, opts ...connect.HandlerOpti
 			controlPlaneSetDetectionHandler.ServeHTTP(w, r)
 		case ControlPlaneGetRiskPictureProcedure:
 			controlPlaneGetRiskPictureHandler.ServeHTTP(w, r)
+		case ControlPlaneGetRiskTrendProcedure:
+			controlPlaneGetRiskTrendHandler.ServeHTTP(w, r)
 		case ControlPlaneListPurpleTemplatesProcedure:
 			controlPlaneListPurpleTemplatesHandler.ServeHTTP(w, r)
 		case ControlPlaneGetPurpleTemplateProcedure:
@@ -1586,6 +1618,10 @@ func (UnimplementedControlPlaneHandler) SetDetection(context.Context, *connect.R
 
 func (UnimplementedControlPlaneHandler) GetRiskPicture(context.Context, *connect.Request[v1.GetRiskPictureRequest]) (*connect.Response[v1.RiskPicture], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.GetRiskPicture is not implemented"))
+}
+
+func (UnimplementedControlPlaneHandler) GetRiskTrend(context.Context, *connect.Request[v1.GetRiskTrendRequest]) (*connect.Response[v1.RiskTrend], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ares.v1.ControlPlane.GetRiskTrend is not implemented"))
 }
 
 func (UnimplementedControlPlaneHandler) ListPurpleTemplates(context.Context, *connect.Request[v1.ListPurpleTemplatesRequest]) (*connect.Response[v1.ListPurpleTemplatesResponse], error) {

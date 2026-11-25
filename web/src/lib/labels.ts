@@ -526,3 +526,19 @@ const PROOF_WHY: Record<string, string> = {
 export function proofWhy(kind: string): string | undefined {
   return PROOF_WHY[kind];
 }
+
+// The risk score's band, in words and a tone. 0 means nothing is open.
+export function riskRatingInfo(score: number): StatusInfo {
+  if (score === 0) return { label: "Nothing open", tone: "good", hint: "No open findings count towards the score." };
+  if (score >= 60) return { label: "High", tone: "bad", hint: "Serious findings are still open." };
+  if (score >= 25) return { label: "Medium", tone: "warn", hint: "Some important findings are still open." };
+  return { label: "Low", tone: "good", hint: "Only minor findings are still open." };
+}
+
+// How the risk score moved since the first test shown, in words.
+export function riskChangeText(first: number, now: number, tests: number): string {
+  if (tests < 2) return "Run another test to see the trend.";
+  if (now < first) return `Down from ${first} after the first test.`;
+  if (now > first) return `Up from ${first} after the first test.`;
+  return `Unchanged since the first test.`;
+}
