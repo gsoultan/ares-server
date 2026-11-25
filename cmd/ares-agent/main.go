@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -171,8 +172,21 @@ func runRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	cfg := config{}
 	fs.StringVar(&cfg.StateDir, "state", defaultStateDir(), "agent state directory")
+	// Egress check destinations (M-25). Only these are ever contacted by the
+	// egresscheck capability; a task can choose tokens, never destinations.
+	var native nativeConfig
+	var bases string
+	fs.StringVar(&native.Egress.CanaryDomain, "canary-domain", "", "Ares canary DNS domain for the egress check")
+	fs.StringVar(&bases, "canary-base", "", "comma-separated Ares canary base URLs for the egress check")
+	fs.StringVar(&native.Egress.DNSServer, "egress-dns", "", "external resolver host:port for the direct-DNS egress channel")
+	fs.StringVar(&native.Egress.DoHURL, "egress-doh", "", "DoH endpoint URL for the DoH egress channel")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	for _, b := range strings.Split(bases, ",") {
+		if b = strings.TrimSpace(b); b != "" {
+			native.Egress.CanaryBases = append(native.Egress.CanaryBases, b)
+		}
 	}
 	st, err := openState(cfg)
 	if err != nil {
@@ -188,7 +202,7 @@ func runRun(args []string) error {
 		return err
 	}
 
-	runner, err := newRunner()
+	runner, err := newRunner(native)
 	if err != nil {
 		return fmt.Errorf("init capability runner: %w", err)
 	}
