@@ -26,18 +26,23 @@ import (
 // the gate, so the module re-checks each target too. That is the same double
 // barrier the server's worker provides.
 type capabilityRunner struct {
-	reg *module.Registry
+	reg    *module.Registry
+	native nativeConfig
 }
 
 // newRunner builds the engine registry inside the agent. Canary options are
 // nil: the inert internal-recon capabilities do not use the out-of-band
 // collaborator.
-func newRunner() (*capabilityRunner, error) {
+func newRunner(native ...nativeConfig) (*capabilityRunner, error) {
 	reg, err := engine.New(engine.Options{})
 	if err != nil {
 		return nil, err
 	}
-	return &capabilityRunner{reg: reg}, nil
+	r := &capabilityRunner{reg: reg}
+	if len(native) > 0 {
+		r.native = native[0]
+	}
+	return r, nil
 }
 
 // taskParams mirrors the server's agentTaskParams JSON payload.
@@ -62,6 +67,9 @@ func (r *capabilityRunner) Run(ctx context.Context, t Task) Result {
 	// checked the allow-list; the agent checks the module is dispatchable too.
 	if agent.GroupOf(t.Capability) == "" {
 		return fail(fmt.Errorf("module %q is not dispatchable to an agent", t.Capability))
+	}
+	if agent.IsAgentNative(t.Capability) {
+		return r.runNative(ctx, t)
 	}
 	mod, ok := r.reg.Get(t.Capability)
 	if !ok {

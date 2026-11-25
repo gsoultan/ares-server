@@ -60,6 +60,7 @@ type Handler struct {
 	auth     *auth.Service     // nil disables the auth RPCs
 	setup    *setup.Service    // nil disables the setup RPCs
 	agents   *agent.Registry   // nil disables the agent-management RPCs
+	egress   *egressMinter     // nil refuses egresscheck dispatch (see egress.go)
 	jobs     JobStopper        // nil disables StopJob
 }
 
