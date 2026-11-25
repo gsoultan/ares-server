@@ -191,3 +191,26 @@ export function toFinding(
     raw: d,
   };
 }
+
+// Approval is the recorded consent behind a finding that came from an
+// intrusive (level 3) test: who allowed it, how, and when.
+export interface Approval {
+  who: string;
+  how?: string;
+  at?: string; // RFC3339
+  action?: string; // what the approved test did, in plain words
+}
+
+// toApproval reads the approval a finding from an intrusive test carries in
+// its payload, under "consent" with level "intrusive" (or 3). Anything else,
+// including a missing approver, means the finding needed no approval, so no
+// approval is shown rather than an incomplete one.
+export function toApproval(data: JsonObject | undefined): Approval | undefined {
+  const c = data?.["consent"];
+  if (!c || typeof c !== "object" || Array.isArray(c)) return undefined;
+  const level = c["level"];
+  if (level !== "intrusive" && level !== 3) return undefined;
+  const who = str(c["who"]);
+  if (!who) return undefined;
+  return { who, how: str(c["how"]), at: str(c["at"]), action: str(c["action"]) };
+}

@@ -11,12 +11,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 
 	"github.com/gsoultan/ares-server/internal/agent"
 	"github.com/gsoultan/ares-server/internal/auth"
+	"github.com/gsoultan/ares-server/internal/egresscheck"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares/module"
@@ -186,7 +188,9 @@ func (h *Handler) DispatchAgentJob(ctx context.Context, req *connect.Request[are
 	mod := req.Msg.GetModule()
 	// The module must exist in the engine and be on the agent's capability
 	// allow-list. Both the server (here) and the agent enforce this.
-	if _, known := h.reg.Get(mod); !known || agent.GroupOf(mod) == "" {
+	// Agent-native capabilities (persistcollect, egresscheck) run in the agent
+	// itself, not as engine modules.
+	if _, known := h.reg.Get(mod); (!known && !agent.IsAgentNative(mod)) || agent.GroupOf(mod) == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
 			errors.New("unknown or non-dispatchable module"))
 	}
@@ -203,7 +207,18 @@ func (h *Handler) DispatchAgentJob(ctx context.Context, req *connect.Request[are
 	for _, t := range req.Msg.GetTargets() {
 		targets = append(targets, targetDomain(t))
 	}
-	params, err := json.Marshal(agentTaskParams{Targets: targets})
+	tp := agentTaskParams{Targets: targets}
+	if mod == "egresscheck" {
+		if h.egress == nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				errors.New("egress check needs the canary collaborator (ARES_CANARY_URL / ARES_CANARY_DOMAIN)"))
+		}
+		tp.Egress = h.egress.plan(eng.ID)
+		if len(tp.Egress) == 0 {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no canary listener is configured for any egress channel"))
+		}
+	}
+	params, err := json.Marshal(tp)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -213,7 +228,15 @@ func (h *Handler) DispatchAgentJob(ctx context.Context, req *connect.Request[are
 	}
 	// Reflect "running a check" in the agent's UI status.
 	h.agents.SetCurrentCapability(a.ID, mod)
-	eng.Audit.Append(auth.Actor(ctx, "", "operator"), "agent.dispatch", a.ID, "queued "+mod)
+	detail := "queued " + mod
+	if len(tp.Egress) > 0 {
+		toks := make([]string, 0, len(tp.Egress))
+		for _, t := range tp.Egress {
+			toks = append(toks, t.Channel+"="+t.Token)
+		}
+		detail += " with egress canary tokens " + strings.Join(toks, ",")
+	}
+	eng.Audit.Append(auth.Actor(ctx, "", "operator"), "agent.dispatch", a.ID, detail)
 	_ = h.store.Save(eng)
 	return connect.NewResponse(&aresv1.DispatchAgentJobResponse{TaskId: taskID}), nil
 }
@@ -222,6 +245,8 @@ func (h *Handler) DispatchAgentJob(ctx context.Context, req *connect.Request[are
 // parameters). For the recon capabilities it is just the target list.
 type agentTaskParams struct {
 	Targets []module.Target `json:"targets"`
+	// Egress carries the canary tokens for an egresscheck task.
+	Egress []egresscheck.Token `json:"egress,omitempty"`
 }
 
 // engagementGate adapts the engagement store into the registry's gate: an agent
