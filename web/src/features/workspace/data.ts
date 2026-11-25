@@ -3,7 +3,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import { control } from "../../client.ts";
 import type { JobProgress, JobSummary, Proof, ProofCheck } from "../../gen/ares/v1/ares_pb.ts";
 import { severityRank, toApproval, toFinding, type Approval, type Finding } from "../../lib/findings.ts";
-import type { StatusInfo } from "../../lib/labels.ts";
+import { formatWhen, type StatusInfo } from "../../lib/labels.ts";
 import { addPending, dropPending, usePending } from "../../lib/local.ts";
 import { useTenant } from "../../tenant.tsx";
 
@@ -100,6 +100,7 @@ export function useJobs(engagementId?: string): { jobs: Job[]; loading: boolean 
           qc.invalidateQueries({ queryKey: ["jobs", tenantId, eng] }),
           qc.invalidateQueries({ queryKey: ["findings", tenantId] }),
           qc.invalidateQueries({ queryKey: ["risk", tenantId, eng] }),
+          qc.invalidateQueries({ queryKey: ["risk-trend", tenantId] }),
           qc.invalidateQueries({ queryKey: ["detection", tenantId, eng] }),
           qc.invalidateQueries({ queryKey: ["purple", tenantId, eng] }),
           qc.invalidateQueries({ queryKey: ["audit", tenantId, eng] }),
@@ -147,6 +148,27 @@ export function useJobOutcome(jobId: string | undefined, done: boolean) {
     enabled: !!jobId && done,
     staleTime: Infinity,
   });
+}
+
+// useRiskTrend is the risk score after each finished test, oldest first, for
+// one engagement or the whole workspace.
+export function useRiskTrend(engagementId?: string) {
+  const { tenantId } = useTenant();
+  return useQuery({
+    queryKey: ["risk-trend", tenantId, engagementId ?? "all"],
+    queryFn: () => control.getRiskTrend({ tenantId, engagementId: engagementId ?? "" }),
+    staleTime: 10_000,
+  });
+}
+
+// fixProof says why a finding counts as fixed: the re-check that could not
+// reproduce it, or the later test that no longer found it. Empty while it is
+// not proven fixed.
+export function fixProof(f: FindingRecord): string {
+  if (!f.rechecked) return "";
+  const last = f.proofChecks[0];
+  if (last && !last.reproduced) return `Re-checked ${formatWhen(last.at)}. The exact test that proved it no longer succeeds.`;
+  return "A later test of the same check on the same address no longer finds it.";
 }
 
 export type FindingStatus = "open" | "in_progress" | "fixed";

@@ -44,6 +44,10 @@ service ControlPlane {
   rpc SetDetection(SetDetectionRequest) returns (DetectionSummary);
   // GetRiskPicture correlates an engagement's findings into prioritized attack paths.
   rpc GetRiskPicture(GetRiskPictureRequest) returns (RiskPicture);
+  // GetRiskTrend returns the risk score after each finished run, oldest first,
+  // for one engagement or the whole workspace, so an owner sees whether things
+  // are improving across runs.
+  rpc GetRiskTrend(GetRiskTrendRequest) returns (RiskTrend);
   rpc ListPurpleTemplates(ListPurpleTemplatesRequest) returns (ListPurpleTemplatesResponse);
   rpc GetPurpleTemplate(GetPurpleTemplateRequest) returns (PurpleTemplate);
   // Advise returns grounded AI advisory text for an engagement. It is strictly
@@ -833,6 +837,35 @@ message RiskPicture {
 message GetRiskPictureRequest {
   string id = 1;
   string tenant_id = 2;
+}
+
+message GetRiskTrendRequest {
+  string tenant_id = 1;
+  string engagement_id = 2; // empty = the whole workspace
+}
+
+// RiskTrendPoint is the risk score right after one finished run. The score is
+// 0-99: 0 means nothing is open, and it rises with each open finding weighted
+// by severity, approaching but never reaching 100. A fix lowers it only once a test proves the fix worked.
+message RiskTrendPoint {
+  string at = 1; // RFC3339, when the run finished
+  string engagement_id = 2;
+  string engagement_name = 3;
+  string job_id = 4;
+  int32 score = 5;
+  int32 critical = 6; // open findings at this point, by severity
+  int32 high = 7;
+  int32 medium = 8;
+  int32 low = 9;
+  int32 new_findings = 10;   // raised by this run and not open before
+  int32 fixed_findings = 11; // proven fixed by this run
+}
+
+message RiskTrend {
+  repeated RiskTrendPoint points = 1; // oldest first, the most recent runs only
+  int32 score = 2;       // the latest score; 0 when nothing ran
+  string rating = 3;     // none | low | medium | high
+  int32 first_score = 4; // the score after the first run shown
 }
 
 message SetDetectionRequest {
