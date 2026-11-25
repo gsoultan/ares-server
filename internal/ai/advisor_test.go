@@ -67,6 +67,7 @@ func TestAdviseDispatchesByFeature(t *testing.T) {
 		FeatureSuggestChecks:  ProfileInput{Target: "https://x", Summary: "nginx + php"},
 		FeatureNarratePaths:   RiskInput{Target: "https://x", Score: 80, Rating: "high"},
 		FeatureDraftReport:    ReportInput{Engagement: "acme", Rating: "high"},
+		FeaturePlanNext:       NextMoveInput{Engagement: "acme", Rating: "high"},
 	}
 	for feature, in := range cases {
 		payload, _ := json.Marshal(in)
@@ -96,13 +97,51 @@ func TestSuggestChecksRemindsAboutScope(t *testing.T) {
 	}
 }
 
+func TestPlanNextMovesGroundsAndGates(t *testing.T) {
+	mp := &mockProvider{reply: "plan"}
+	a := NewAdvisor(mp, 256)
+	in := NextMoveInput{
+		Engagement: "acme",
+		Target:     "https://x",
+		Rating:     "high",
+		Proven:     []FindingInput{{Title: "SSRF confirmed via canary", IssueKey: "ssrf", Technique: "T1190"}},
+		Observed:   []FindingInput{{Title: "Reflected input", IssueKey: "injection-reflected"}},
+		RanModules: []string{"recon", "ssrfprobe"},
+	}
+	if _, err := a.PlanNextMoves(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if mp.last.System != advisorSystem {
+		t.Error("plan-next must send the guardrail system prompt")
+	}
+	prompt := strings.ToLower(mp.last.Messages[0].Content)
+	// It must be grounded in the proven finding and must keep the human in control.
+	for _, want := range []string{"ssrf confirmed via canary", "consent level", "scope", "dispatches"} {
+		if !strings.Contains(prompt, strings.ToLower(want)) {
+			t.Errorf("plan-next prompt is missing %q", want)
+		}
+	}
+}
+
 func TestFeaturesAndNotice(t *testing.T) {
-	if len(Features()) != 4 {
-		t.Errorf("want 4 features, got %v", Features())
+	if len(Features()) != 6 {
+		t.Errorf("want 6 features, got %v", Features())
+	}
+	if !contains(Features(), FeaturePlanNext) {
+		t.Errorf("Features() must include plan-next, got %v", Features())
 	}
 	for _, want := range []string{"never runs a test", "scope", "authoriz"} {
 		if !strings.Contains(strings.ToLower(Notice), strings.ToLower(want)) {
 			t.Errorf("Notice is missing %q", want)
 		}
 	}
+}
+
+func contains(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
 }

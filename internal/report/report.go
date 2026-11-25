@@ -42,6 +42,27 @@ type Finding struct {
 	IssueKey    string               // stable issue slug, used to correlate attack paths
 	Proof       string
 	Request     string
+
+	// ID is the finding's stable id (see FindingKey), the same one the app shows.
+	ID string
+	// Plain is the one-sentence, jargon-free "what this means and what to do"
+	// headline an owner reads first (the engine's PlainSummary).
+	Plain string
+	// Status is the triage status someone set: open | in_progress | fixed.
+	Status string
+	// FirstSeen and LastSeen bound the runs that raised it.
+	FirstSeen time.Time
+	LastSeen  time.Time
+	// StillPresent is false once a later run of the same check and target did
+	// not raise it again: the fix is proven by a test, not just claimed.
+	StillPresent bool
+	// ClearedAt is when the later run that no longer raised it started; zero
+	// while the finding is still present.
+	ClearedAt time.Time
+	// ProofFingerprint is the sealed fingerprint of the newest proof.
+	ProofFingerprint string
+	// Rechecks is every reproduce-on-demand run of the proof, newest first.
+	Rechecks []Recheck
 }
 
 // Meta is the engagement header of a report.
@@ -93,6 +114,14 @@ type Report struct {
 	Evidence  []EvidenceItem // forensic artifacts ingested, for the chain-of-custody section
 	Detection detection.Summary
 	Risk      intel.RiskPicture // correlated, prioritized attack paths
+	Trend     []TrendPoint      // the engagement's risk score after each run, oldest first
+}
+
+// Options carries what a report needs beyond the engagement's outcomes.
+type Options struct {
+	// Status returns the triage status someone set on a finding (open |
+	// in_progress | fixed). Nil treats every finding as open.
+	Status func(findingID string) string
 }
 
 // ExercisedTechniques tallies, across a set of outcomes, how many findings each
@@ -148,8 +177,17 @@ func (r Report) SeveritySummary() string {
 }
 
 // Build assembles a report from an engagement, its workspace name and the
-// outcomes of every job it ran. Findings are ordered most serious first.
+// outcomes of every job it ran, treating every finding as open.
 func Build(eng *engagement.Engagement, workspace string, outcomes []worker.Outcome) Report {
+	return BuildWith(eng, workspace, outcomes, Options{})
+}
+
+// BuildWith assembles a report from an engagement, its workspace name, the
+// outcomes of every job it ran and the triage state in opts. A finding raised by
+// several runs appears once, with the newest run's details, the span of runs
+// that raised it, its re-check history and whether a later run proved it fixed.
+// Open findings come first, most serious first; proven fixes follow.
+func BuildWith(eng *engagement.Engagement, workspace string, outcomes []worker.Outcome, opts Options) Report {
 	r := Report{
 		Generated: time.Now().UTC(),
 		Meta: Meta{
@@ -170,16 +208,18 @@ func Build(eng *engagement.Engagement, workspace string, outcomes []worker.Outco
 	}
 	for _, o := range outcomes {
 		for _, res := range o.Results {
-			switch res.Kind {
-			case "finding", "info":
-				r.Findings = append(r.Findings, findingFromResult(res))
-			case "evidence":
+			if res.Kind == "evidence" {
 				r.Evidence = append(r.Evidence, evidenceFromResult(res))
 			}
 		}
 	}
+	r.Findings = collect(outcomes, opts)
 	sort.SliceStable(r.Findings, func(i, j int) bool {
-		return severityRank(r.Findings[i].Severity) < severityRank(r.Findings[j].Severity)
+		a, b := r.Findings[i], r.Findings[j]
+		if pa, pb := a.State() == StateProvenFixed, b.State() == StateProvenFixed; pa != pb {
+			return !pa
+		}
+		return severityRank(a.Severity) < severityRank(b.Severity)
 	})
 	sort.SliceStable(r.Evidence, func(i, j int) bool {
 		if r.Evidence[i].IngestedAt != r.Evidence[j].IngestedAt {
@@ -188,8 +228,126 @@ func Build(eng *engagement.Engagement, workspace string, outcomes []worker.Outco
 		return r.Evidence[i].Name < r.Evidence[j].Name
 	})
 	r.Detection = detection.BuildSummary(ExercisedTechniques(outcomes), eng.Detections())
-	r.Risk = correlateFindings(r.Findings)
+	// The attack-path picture is about what an attacker can still do, so it is
+	// built from the findings that are not proven fixed.
+	r.Risk = correlateFindings(r.Open())
+	r.Trend = RiskTrend(outcomes)
 	return r
+}
+
+// Open is the findings not yet proven fixed, in report order.
+func (r Report) Open() []Finding {
+	var out []Finding
+	for _, f := range r.Findings {
+		if f.State() != StateProvenFixed {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// ProvenFixed is the findings a later test proved fixed, in report order.
+func (r Report) ProvenFixed() []Finding {
+	var out []Finding
+	for _, f := range r.Findings {
+		if f.State() == StateProvenFixed {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// collect deduplicates the findings across outcomes by stable id, keeping the
+// newest run's payload, and attaches each one's re-check history and whether a
+// later run of its check and target no longer raised it.
+func collect(outcomes []worker.Outcome, opts Options) []Finding {
+	// When was each (module, target) last run?
+	latestRun := map[string]time.Time{}
+	for _, o := range outcomes {
+		if o.Running() {
+			continue
+		}
+		for mt := range RanModuleTargets(o) {
+			if o.StartedAt.After(latestRun[mt]) {
+				latestRun[mt] = o.StartedAt
+			}
+		}
+	}
+
+	type agg struct {
+		f      Finding
+		mt     string
+		engID  string
+		newest time.Time
+		seen   bool
+	}
+	byID := map[string]*agg{}
+	var order []string
+	for _, o := range outcomes {
+		for _, res := range o.Results {
+			if res.Kind != "finding" && res.Kind != "info" {
+				continue
+			}
+			title, _ := res.Data["title"].(string)
+			target := res.Target.String()
+			id := FindingKey(o.Engagement, res.Capability, res.Technique, title, target)
+			a, ok := byID[id]
+			if !ok {
+				a = &agg{mt: res.Capability + "\x00" + target, engID: o.Engagement}
+				byID[id] = a
+				order = append(order, id)
+			}
+			if !a.seen || o.StartedAt.After(a.newest) {
+				first, last := a.f.FirstSeen, a.f.LastSeen
+				a.f = findingFromResult(res)
+				a.f.ID = id
+				a.f.FirstSeen, a.f.LastSeen = first, last
+				a.newest = o.StartedAt
+			}
+			if !a.seen || o.StartedAt.Before(a.f.FirstSeen) {
+				a.f.FirstSeen = o.StartedAt
+			}
+			if o.StartedAt.After(a.f.LastSeen) {
+				a.f.LastSeen = o.StartedAt
+			}
+			a.seen = true
+		}
+	}
+
+	// Re-checks attach only to a finding of the engagement they ran in.
+	for _, o := range outcomes {
+		rc := o.Recheck
+		if rc == nil || o.Running() {
+			continue
+		}
+		a, ok := byID[rc.FindingID]
+		if !ok || a.engID != o.Engagement {
+			continue
+		}
+		a.f.Rechecks = append(a.f.Rechecks, Recheck{
+			At: o.FinishedAt, Reproduced: rc.Reproduced, Fingerprint: rc.Fingerprint, JobID: o.JobID,
+		})
+	}
+
+	out := make([]Finding, 0, len(order))
+	for _, id := range order {
+		a := byID[id]
+		f := a.f
+		sort.SliceStable(f.Rechecks, func(i, j int) bool { return f.Rechecks[i].At.After(f.Rechecks[j].At) })
+		f.StillPresent = true
+		if lr, ok := latestRun[a.mt]; ok && lr.After(f.LastSeen) {
+			f.StillPresent = false
+			f.ClearedAt = lr
+		}
+		f.Status = "open"
+		if opts.Status != nil {
+			if s := opts.Status(id); s != "" {
+				f.Status = s
+			}
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // RiskOf correlates the findings across a set of outcomes into a prioritized
@@ -279,9 +437,19 @@ func findingFromResult(res module.Result) Finding {
 	if f.Remediation == "" {
 		f.Remediation = f.Guidance.Summary
 	}
+	f.Plain = f.Guidance.PlainSummary
+	if p, ok := d["remediationPlain"].(string); ok && p != "" {
+		f.Plain = p
+	}
 	if ev, ok := d["evidence"].(map[string]any); ok {
 		f.Proof = str(ev["proof"])
 		f.Request = str(ev["request"])
+	}
+	if res.Proof != nil {
+		if f.Proof == "" {
+			f.Proof = res.Proof.Summary
+		}
+		f.ProofFingerprint = res.Proof.Fingerprint
 	}
 	if f.Title == "" {
 		f.Title = "(untitled finding)"

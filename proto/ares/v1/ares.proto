@@ -44,6 +44,10 @@ service ControlPlane {
   rpc SetDetection(SetDetectionRequest) returns (DetectionSummary);
   // GetRiskPicture correlates an engagement's findings into prioritized attack paths.
   rpc GetRiskPicture(GetRiskPictureRequest) returns (RiskPicture);
+  // GetRiskTrend returns the risk score after each finished run, oldest first,
+  // for one engagement or the whole workspace, so an owner sees whether things
+  // are improving across runs.
+  rpc GetRiskTrend(GetRiskTrendRequest) returns (RiskTrend);
   rpc ListPurpleTemplates(ListPurpleTemplatesRequest) returns (ListPurpleTemplatesResponse);
   rpc GetPurpleTemplate(GetPurpleTemplateRequest) returns (PurpleTemplate);
   // Advise returns grounded AI advisory text for an engagement. It is strictly
@@ -141,13 +145,39 @@ service ControlPlane {
 message AdviseRequest {
   string tenant_id = 1;
   string engagement_id = 2;
-  // feature: explain-finding | suggest-checks | narrate-paths | draft-report
+  // feature: explain-finding | suggest-checks | narrate-paths | draft-report |
+  // plan-next | draft-module
   string feature = 3;
   // finding_id is required for the explain-finding feature.
   string finding_id = 4;
   // opt_in is the operator's per-engagement consent to send this engagement's
   // data to the configured AI provider. No data leaves Ares unless it is true.
   bool opt_in = 5;
+  // brief is required for the draft-module feature: the CVE id and
+  // description, or the weakness to draft a check for. It is sent to the
+  // provider together with the engagement's observations, under opt_in.
+  string brief = 6;
+}
+
+// ModuleDraft is an AI-drafted first cut of a level-1 detection module,
+// rendered by the ares module scaffold. It is a proposal for a person to
+// review and finish: the server never writes it to a repository, compiles,
+// registers or runs it.
+message ModuleDraft {
+  string name = 1;
+  // spec_json is the scaffold spec the files were rendered from; save it and
+  // run `go run ./cmd/aresmod spec.json` in the ares repository to re-render.
+  string spec_json = 2;
+  repeated DraftFile files = 3; // empty when the spec failed validation
+  repeated string review_notes = 4; // what a person must do before it merges
+  repeated string problems = 5; // why the spec was refused, when it was
+  string refusal = 6; // set when the advisor declined: the check cannot be done safely read-only
+}
+
+// DraftFile is one rendered file, at a path relative to the ares repository root.
+message DraftFile {
+  string path = 1;
+  string content = 2;
 }
 
 // AdviseResponse carries the advisory narrative, or the reason none was produced.
@@ -162,6 +192,7 @@ message AdviseResponse {
   int32 input_tokens = 8;
   int32 output_tokens = 9;
   string error = 10; // a provider/transport error, surfaced for the UI (no key)
+  ModuleDraft module_draft = 11; // draft-module only; text carries the same draft as prose
 }
 
 // AISettings is the non-secret portion of the AI advisory configuration.
@@ -832,6 +863,35 @@ message RiskPicture {
 message GetRiskPictureRequest {
   string id = 1;
   string tenant_id = 2;
+}
+
+message GetRiskTrendRequest {
+  string tenant_id = 1;
+  string engagement_id = 2; // empty = the whole workspace
+}
+
+// RiskTrendPoint is the risk score right after one finished run. The score is
+// 0-99: 0 means nothing is open, and it rises with each open finding weighted
+// by severity, approaching but never reaching 100. A fix lowers it only once a test proves the fix worked.
+message RiskTrendPoint {
+  string at = 1; // RFC3339, when the run finished
+  string engagement_id = 2;
+  string engagement_name = 3;
+  string job_id = 4;
+  int32 score = 5;
+  int32 critical = 6; // open findings at this point, by severity
+  int32 high = 7;
+  int32 medium = 8;
+  int32 low = 9;
+  int32 new_findings = 10;   // raised by this run and not open before
+  int32 fixed_findings = 11; // proven fixed by this run
+}
+
+message RiskTrend {
+  repeated RiskTrendPoint points = 1; // oldest first, the most recent runs only
+  int32 score = 2;       // the latest score; 0 when nothing ran
+  string rating = 3;     // none | low | medium | high
+  int32 first_score = 4; // the score after the first run shown
 }
 
 message SetDetectionRequest {

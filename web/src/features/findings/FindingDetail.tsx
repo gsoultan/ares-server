@@ -15,6 +15,7 @@ import {
   useSetFindingStatus,
   type FindingRecord,
   type FindingStatus,
+  fixProof,
 } from "../workspace/data.ts";
 import { Facts, FixSteps, Part } from "./FindingParts.tsx";
 import { AiAdvice } from "../ai/AiAdvice.tsx";
@@ -224,6 +225,9 @@ export function FindingDetail({
       )}
       {setStatus.isError && (
         <ErrorNote title="The status could not be saved">{errorText(setStatus.error)}</ErrorNote>
+      )}
+      {!settled && record.rechecked && (
+        <InfoNote title="Fixed and proven">{fixProof(record)}</InfoNote>
       )}
       {settled &&
         (failed ? (

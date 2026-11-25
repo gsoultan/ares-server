@@ -17,24 +17,24 @@ import (
 	"github.com/gsoultan/ares/remediation"
 )
 
-// A minimal PDF writer. It lays text out in the three standard Courier fonts
-// (no font embedding, so the file needs no external resources) and paginates
-// Letter pages. Courier is monospaced, so line wrapping is exact from the
-// character count — no font-metric tables required. This keeps report
-// generation inside the standard library and the binary self-contained.
+// A minimal PDF writer. It lays text out in the standard Helvetica fonts, with
+// Courier for code (no font embedding, so the file needs no external
+// resources), wraps lines from the fonts' published widths (pdffont.go) and
+// paginates Letter pages with a running footer. This keeps report generation
+// inside the standard library and the binary self-contained.
 
 const (
-	pdfPageW    = 612.0 // US Letter, points
-	pdfPageH    = 792.0
-	pdfMargin   = 54.0 // 0.75"
-	pdfCharWMul = 0.6  // Courier advance width = 0.6em
+	pdfPageW   = 612.0 // US Letter, points
+	pdfPageH   = 792.0
+	pdfMargin  = 54.0 // 0.75"
+	pdfFooterY = 30.0 // baseline of the running footer
 )
 
 // font references in the page resources.
 const (
 	fontRegular = "/F1"
 	fontBold    = "/F2"
-	fontOblique = "/F3"
+	fontCode    = "/F3"
 )
 
 type pline struct {
@@ -50,12 +50,9 @@ func (b *pdfBuilder) contentWidth(indent float64) float64 { return pdfPageW - 2*
 
 // push wraps text to the content width and appends one pline per physical line.
 func (b *pdfBuilder) push(font string, size, indent float64, text string) {
-	maxChars := int(b.contentWidth(indent) / (size * pdfCharWMul))
-	if maxChars < 8 {
-		maxChars = 8
-	}
+	measure := func(s string) float64 { return textWidth(font, size, s) }
 	for _, seg := range strings.Split(text, "\n") {
-		for _, wrapped := range wrap(seg, maxChars) {
+		for _, wrapped := range wrapWidth(seg, b.contentWidth(indent), measure) {
 			b.lines = append(b.lines, pline{font: font, size: size, indent: indent, text: wrapped})
 		}
 	}
@@ -69,8 +66,27 @@ func (b *pdfBuilder) label(k, v string) {
 	b.push(fontBold, 10, 0, k)
 	b.push(fontRegular, 10, 12, v)
 }
-func (b *pdfBuilder) code(text string) { b.push(fontOblique, 9, 12, text) }
+func (b *pdfBuilder) code(text string) { b.push(fontCode, 9, 12, text) }
 func (b *pdfBuilder) spacer(h float64) { b.lines = append(b.lines, pline{size: h}) }
+
+// blocks renders the shared owner-facing blocks.
+func (b *pdfBuilder) blocks(bs []block) {
+	for _, bl := range bs {
+		switch bl.kind {
+		case bH2:
+			b.h2(bl.text)
+		case bH3:
+			b.h3(bl.text)
+		case bPara:
+			b.body(bl.text)
+			b.spacer(3)
+		case bLabel:
+			b.label(bl.label, bl.text)
+		case bBullet:
+			b.push(fontRegular, 10, 12, "- "+bl.text)
+		}
+	}
+}
 
 // writeRiskPDF renders the correlated, prioritized attack paths.
 func (b *pdfBuilder) writeRiskPDF(risk intel.RiskPicture) {
@@ -78,7 +94,7 @@ func (b *pdfBuilder) writeRiskPDF(risk intel.RiskPicture) {
 		return
 	}
 	b.h2("Risk picture — prioritized attack paths")
-	b.body(fmt.Sprintf("Overall risk: %s (score %d/100). Ares correlated the findings into %d attack path(s), most urgent first.",
+	b.body(fmt.Sprintf("Overall risk: %s (top path priority %d/100). Ares correlated the findings into %d attack path(s), most urgent first.",
 		strings.ToUpper(risk.Rating), risk.Score, len(risk.Paths)))
 	for i, p := range risk.Paths {
 		b.h3(fmt.Sprintf("%d. [%s] %s — priority %d/100", i+1, strings.ToUpper(p.Severity), p.Name, p.Priority))
@@ -165,6 +181,7 @@ func (r Report) PDF() []byte {
 	b := &pdfBuilder{}
 	b.h1("Security assessment — " + r.Meta.EngagementName)
 	b.body("Generated " + r.Generated.Format(time.RFC3339))
+	b.blocks(r.ownerBlocks())
 
 	b.h2("Engagement")
 	b.label("Workspace", orNA(r.Meta.Workspace))
@@ -193,6 +210,7 @@ func (r Report) PDF() []byte {
 	}
 	for i, f := range r.Findings {
 		b.h3(fmt.Sprintf("%d. [%s] %s", i+1, strings.ToUpper(f.Severity), f.Title))
+		b.blocks(f.findingBlocks())
 		if f.URL != "" {
 			b.label("URL", f.URL)
 		}
@@ -225,7 +243,8 @@ func (r Report) PDF() []byte {
 
 	b.writeEvidencePDF(r)
 
-	return assemblePDF(b.paginate())
+	footer := "Ares security assessment - " + r.Meta.EngagementName + " - Confidential"
+	return assemblePDF(b.paginate(), footer)
 }
 
 // writeEvidencePDF renders the forensic chain-of-custody section: each ingested
@@ -251,7 +270,7 @@ func (b *pdfBuilder) writeEvidencePDF(r Report) {
 
 // assemblePDF writes the PDF object graph: catalog, page tree, three standard
 // fonts, and a page + content-stream object per page.
-func assemblePDF(pages [][]placed) []byte {
+func assemblePDF(pages [][]placed, footer string) []byte {
 	const (
 		objCatalog = 1
 		objPages   = 2
@@ -280,9 +299,9 @@ func assemblePDF(pages [][]placed) []byte {
 	obj(objCatalog, "<< /Type /Catalog /Pages 2 0 R >>")
 	obj(objPages, fmt.Sprintf("<< /Type /Pages /Count %d /Kids [%s] /MediaBox [0 0 %g %g] >>",
 		len(pages), strings.Join(kids, " "), pdfPageW, pdfPageH))
-	obj(objF1, "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>")
-	obj(objF2, "<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>")
-	obj(objF3, "<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Oblique >>")
+	obj(objF1, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>")
+	obj(objF2, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>")
+	obj(objF3, "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>")
 
 	for k, page := range pages {
 		pageObj := firstPage + 2*k
@@ -297,6 +316,11 @@ func assemblePDF(pages [][]placed) []byte {
 			fmt.Fprintf(&cs, "%s %g Tf\n1 0 0 1 %g %g Tm\n(%s) Tj\n",
 				ln.font, ln.size, ln.x, ln.y, escapePDFText(ln.text))
 		}
+		// Running footer: what the document is, and where the reader is in it.
+		fmt.Fprintf(&cs, "%s 8 Tf\n1 0 0 1 %g %g Tm\n(%s) Tj\n", fontRegular, pdfMargin, pdfFooterY, escapePDFText(footer))
+		num := fmt.Sprintf("Page %d of %d", k+1, len(pages))
+		fmt.Fprintf(&cs, "%s 8 Tf\n1 0 0 1 %g %g Tm\n(%s) Tj\n", fontRegular,
+			pdfPageW-pdfMargin-textWidth(fontRegular, 8, num), pdfFooterY, escapePDFText(num))
 		cs.WriteString("ET\n")
 		stream := cs.String()
 		obj(contentObj, fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream", len(stream), stream))
@@ -314,21 +338,36 @@ func assemblePDF(pages [][]placed) []byte {
 	return buf.Bytes()
 }
 
-// escapePDFText escapes PDF string delimiters and transliterates the few
-// non-ASCII runes a report tends to carry (dashes, smart quotes, ellipsis) to
-// ASCII, mapping anything else outside printable ASCII to '?', so arbitrary
-// finding text cannot break the content stream.
+// escapePDFText transliterates text to printable ASCII (see pdfASCII) and
+// escapes the PDF string delimiters, so arbitrary finding text cannot break the
+// content stream.
 func escapePDFText(s string) string {
+	plain := pdfASCII(s)
 	var b strings.Builder
-	b.Grow(len(s) + 8)
-	for _, r := range s {
-		switch r {
+	b.Grow(len(plain) + 8)
+	for i := 0; i < len(plain); i++ {
+		switch c := plain[i]; c {
 		case '\\':
 			b.WriteString(`\\`)
 		case '(':
 			b.WriteString(`\(`)
 		case ')':
 			b.WriteString(`\)`)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// pdfASCII maps the few non-ASCII runes a report tends to carry (dashes, smart
+// quotes, bullets, ellipsis) to ASCII, turns control whitespace into spaces and
+// anything else outside printable ASCII into '?'.
+func pdfASCII(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch r {
 		case '\r', '\n', '\t':
 			b.WriteByte(' ')
 		case '–', '—':
@@ -339,6 +378,8 @@ func escapePDFText(s string) string {
 			b.WriteByte('\'')
 		case '…':
 			b.WriteString("...")
+		case '•':
+			b.WriteByte('-')
 		default:
 			if r >= 0x20 && r <= 0x7e {
 				b.WriteRune(r)
@@ -348,42 +389,4 @@ func escapePDFText(s string) string {
 		}
 	}
 	return b.String()
-}
-
-// wrap breaks s into lines of at most maxChars characters, preferring to break
-// on spaces and hard-splitting any single token longer than the width.
-func wrap(s string, maxChars int) []string {
-	if s == "" {
-		return []string{""}
-	}
-	var out []string
-	for _, word := range splitKeepLong(strings.Fields(s), maxChars) {
-		if len(out) == 0 {
-			out = append(out, word)
-			continue
-		}
-		last := out[len(out)-1]
-		if len(last)+1+len(word) <= maxChars {
-			out[len(out)-1] = last + " " + word
-		} else {
-			out = append(out, word)
-		}
-	}
-	if len(out) == 0 {
-		return []string{""}
-	}
-	return out
-}
-
-// splitKeepLong hard-splits any word longer than maxChars into chunks.
-func splitKeepLong(words []string, maxChars int) []string {
-	var out []string
-	for _, w := range words {
-		for len(w) > maxChars {
-			out = append(out, w[:maxChars])
-			w = w[maxChars:]
-		}
-		out = append(out, w)
-	}
-	return out
 }

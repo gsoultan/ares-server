@@ -429,7 +429,9 @@ func (h *Handler) GenerateReport(_ context.Context, req *connect.Request[aresv1.
 	if t, ok := h.store.GetTenant(eng.TenantID); ok {
 		workspace = t.Name
 	}
-	rep := report.Build(eng, workspace, h.outcomes.ByEngagement(eng.ID))
+	// The report carries each finding's triage status, so "marked fixed" and
+	// "proven fixed" read the same on paper as in the app.
+	rep := report.BuildWith(eng, workspace, h.outcomes.ByEngagement(eng.ID), report.Options{Status: h.statuses.get})
 
 	data, contentType, ext, err := rep.Render(req.Msg.GetFormat())
 	if err != nil {
