@@ -25,7 +25,16 @@ import (
 	"github.com/gsoultan/ares-server/internal/technique"
 	"github.com/gsoultan/ares/module"
 	"github.com/gsoultan/ares/remediation"
+	"github.com/gsoultan/ares/websession"
 )
+
+// AuthProvider builds the authenticated session an engagement's probes run
+// under, from the workspace's stored, sealed credential. It returns a nil
+// session when the engagement has no credential (the probes then run
+// anonymously, as before). internal/authprofile.Provider satisfies it.
+type AuthProvider interface {
+	SessionFor(ctx context.Context, eng *engagement.Engagement) (*websession.Session, error)
+}
 
 // Denial records a target that the gate refused.
 type Denial struct {
@@ -89,11 +98,21 @@ type OutcomeStore interface {
 type Processor struct {
 	reg   *module.Registry
 	store engagement.Store
+	auth  AuthProvider
 }
 
 // NewProcessor wires a processor to the module registry and engagement store.
 func NewProcessor(reg *module.Registry, store engagement.Store) *Processor {
 	return &Processor{reg: reg, store: store}
+}
+
+// WithAuth sets the provider that supplies an engagement's authenticated
+// session, so probes run behind a login when the workspace has stored a
+// credential. It returns the processor for chaining. A processor with no
+// provider runs every probe anonymously, exactly as before.
+func (p *Processor) WithAuth(a AuthProvider) *Processor {
+	p.auth = a
+	return p
 }
 
 // Process runs one job: it loads the engagement, refuses if it cannot run,
@@ -276,6 +295,20 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 			snapshot()
 		}
 	})
+	// Authenticated, stateful testing: when the workspace has stored a
+	// credential for this engagement, run the module's requests as the
+	// logged-in user. The session is scoped to the engagement's in-scope hosts
+	// by the provider, so it is never carried off-target. A failure to build it
+	// is recorded and the probe proceeds anonymously — the safe default — rather
+	// than refusing the job.
+	if p.auth != nil {
+		if sess, serr := p.auth.SessionFor(runCtx, eng); serr != nil {
+			eng.Audit.Append(job.Actor, "auth-session-skipped", job.Module, serr.Error())
+		} else if sess != nil {
+			runCtx = websession.WithSession(runCtx, sess)
+			eng.Audit.Append(job.Actor, "auth-session", job.Module, "probing as the stored test identity")
+		}
+	}
 	err = mod.Run(runCtx, eng.Scope, allowed, results)
 	close(results)
 	collectWG.Wait()
