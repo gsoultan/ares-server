@@ -130,20 +130,29 @@ scripts/dev.sh            # run the seeded demo; Ctrl-C stops everything it star
   small, deliberately weak site that listens on loopback only. Its weaknesses
   are simulated (canned fake files, arithmetic-only "templates", a fixed fake
   passwd line) so the checks have something safe to find,
-- on a Mac with Apple's [`container`](https://github.com/apple/container) CLI,
-  **PostgreSQL** in a container on its own port (see below).
+- a **demo agent** (`cmd/ares-agent`) on this machine, enrolled to the demo
+  engagement with a one-time install key and allowed only discovery, web checks
+  and local posture. It runs two safe web checks against the practice target, so
+  the Agents page shows a connected agent and its findings (they arrive about a
+  minute after start, on the agent's next heartbeat),
+- **PostgreSQL** in a container on its own port, when asked for (`--postgres`)
+  or by default on a Mac with Apple's `container` CLI (see below).
 
-It has two modes:
+It has these modes:
 
-| Command                  | What you get                                                          |
-| ------------------------ | --------------------------------------------------------------------- |
-| `scripts/dev.sh`         | **Seeded demo.** Skips the `/setup` wizard. Sign in as `admin@northwind.db` / `admin`. Workspace "Northwind Traders" (plus an empty "Contoso" one), engagement "Northwind practice lab" authorized for `127.0.0.1` only, and findings from safe checks against the practice target and from forensic jobs over `samples/`. Data persists in `.dev/`. |
-| `scripts/dev.sh --fresh` | The same, after wiping `.dev/` and reseeding.                         |
-| `scripts/dev.sh --setup` | **First run.** In-memory and empty, so the app opens on the `/setup` wizard. Nothing is kept. |
+| Command                      | What you get                                                          |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `scripts/dev.sh`             | **Seeded demo.** Skips the `/setup` wizard. Sign in as `admin@northwind.db` / `admin`. Workspace "Northwind Traders" (plus an empty "Contoso" one), engagement "Northwind practice lab" authorized for `127.0.0.1` only, findings from safe checks against the practice target and from forensic jobs over `samples/`, and a connected demo agent. Data persists in `.dev/` (embedded file store). |
+| `scripts/dev.sh --postgres`  | The same seeded demo, stored in the dev PostgreSQL container instead of the file store. |
+| `scripts/dev.sh --fresh`     | Wipe the demo's data and reseed (with `--postgres`, it empties that database). |
+| `scripts/dev.sh --setup`     | **First run.** In-memory and empty, so the app opens on the `/setup` wizard. Nothing is kept. |
 
-Add `--no-pg` to either to skip the PostgreSQL container. Job results and finding
-statuses are held in memory by the server today, so the seeded demo re-runs its
-sample jobs on every start; accounts, workspaces and engagements persist.
+Other flags: `--no-agent` skips the demo agent, `--no-pg` skips the PostgreSQL
+container, and `--rerun-jobs` dispatches the sample jobs again. Job results
+persist with the datastore, so on a seeded store the sample jobs are only
+dispatched the first time. Accounts, workspaces, engagements, jobs and findings
+persist; the server keeps enrolled agents in memory, so the demo agent enrolls
+afresh on every start.
 
 > **The demo credential is for local development only.** `admin` is shorter than
 > the 12-character policy; only the dev seeder (`cmd/ares-devseed`) can write it,
@@ -151,35 +160,38 @@ sample jobs on every start; accounts, workspaces and engagements persist.
 > still enforce the policy. Never point the seeder or `scripts/dev.sh` at a real
 > deployment.
 
-Optional environment variables:
+Settings can live in a `.dev.env` file in the repo root (gitignored): copy
+`scripts/dev.env.example` and change what you need. Flags win over the file.
 
-| Variable        | Default              | Meaning                                         |
-| --------------- | -------------------- | ----------------------------------------------- |
-| `ARES_ADDR`     | `:8080`              | control-plane listen address                    |
-| `WEB_PORT`      | `5173`               | web dev-server port                             |
-| `PRACTICE_ADDR` | `127.0.0.1:8089`     | practice target (must be a loopback address)    |
-| `DEV_DIR`       | `.dev`               | seeded database and master key                  |
-| `DEV_EMAIL`     | `admin@northwind.db` | demo super-admin email                          |
-| `DEV_PASSWORD`  | `admin`              | demo super-admin password                       |
-| `ARES_PG`       | `auto`               | `on`, `off`, or `auto` (on when `container` is installed) |
-| `ARES_PG_PORT`  | `55433`              | PostgreSQL host port                            |
+| Variable          | Default              | Meaning                                         |
+| ----------------- | -------------------- | ----------------------------------------------- |
+| `ARES_ADDR`       | `:8080`              | control-plane listen address                    |
+| `WEB_PORT`        | `5173`               | web dev-server port                             |
+| `PRACTICE_ADDR`   | `127.0.0.1:8089`     | practice target (must be a loopback address)    |
+| `DEV_DIR`         | `.dev`               | seeded database, master keys and agent state    |
+| `DEV_EMAIL`       | `admin@northwind.db` | demo super-admin email                          |
+| `DEV_PASSWORD`    | `admin`              | demo super-admin password                       |
+| `DEV_AGENT`       | `on`                 | start the demo agent (`off` = `--no-agent`)     |
+| `ARES_PG`         | `auto`               | `on`, `off`, or `auto` (on when Apple's `container` is installed) |
+| `ARES_PG_RUNTIME` | `auto`               | `container`, `docker`, or `auto` (`container` if installed, else Docker) |
+| `ARES_PG_PORT`    | `55433`              | PostgreSQL host port                            |
 
-#### PostgreSQL in an Apple container
+#### PostgreSQL in a container
 
 `scripts/postgres.sh` runs PostgreSQL 17 in Apple's `container` runtime (macOS 26
-on Apple silicon), published on `127.0.0.1:55433` rather than the default 5432,
-in a container named `ares-dev-postgres` with its own volume, so it does not
-clash with other Postgres instances or containers on the machine.
+on Apple silicon) or, when that is not installed, in Docker (Docker Desktop,
+OrbStack, Colima or Linux). It publishes on `127.0.0.1:55433` rather than the
+default 5432, in a container named `ares-dev-postgres` with its own volume, so it
+does not clash with other Postgres instances or containers on the machine.
 `scripts/dev.sh` starts it and leaves it running when you stop the stack.
 
 ```sh
-scripts/postgres.sh up | down | status | psql | url | destroy
+scripts/postgres.sh up | down | status | psql | url | reset | destroy
 ```
 
-The dev script exports the container's URL as `ARES_PG_URL`, but it also sets
-`ARES_DB` to the seeded file store, and `ARES_DB` wins, so the demo runs on the
-embedded file store. To run the server on the storm-based Postgres datastore,
-set `ARES_DB` (or only `ARES_PG_URL`) to a `postgres://` URL.
+`scripts/dev.sh --postgres` runs the seeded demo on it. Outside the dev script,
+set `ARES_DB` (or only `ARES_PG_URL`) to a `postgres://` URL to run the server on
+the storm-based Postgres datastore.
 
 #### Sample files
 
