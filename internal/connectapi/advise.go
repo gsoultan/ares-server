@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 
 	"connectrpc.com/connect"
 
@@ -51,7 +52,10 @@ func (h *Handler) Advise(ctx context.Context, req *connect.Request[aresv1.Advise
 
 	if !validFeature(feature) {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("feature must be one of: explain-finding, suggest-checks, narrate-paths, draft-report, plan-next"))
+			errors.New("feature must be one of: explain-finding, suggest-checks, narrate-paths, draft-report, plan-next, draft-module"))
+	}
+	if feature == ai.FeatureDraftModule && strings.TrimSpace(req.Msg.GetBrief()) == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, ai.ErrEmptyBrief)
 	}
 
 	// The engagement is always resolved (tenant-checked) so the data is grounded
@@ -65,6 +69,10 @@ func (h *Handler) Advise(ctx context.Context, req *connect.Request[aresv1.Advise
 	if !req.Msg.GetOptIn() {
 		resp.OptInRequired = true
 		return connect.NewResponse(resp), nil
+	}
+
+	if feature == ai.FeatureDraftModule {
+		return h.draftModule(ctx, advisor, resp, eng.ID, eng.Name, req.Msg.GetBrief())
 	}
 
 	engName := map[string]string{eng.ID: eng.Name}
@@ -105,9 +113,51 @@ func (h *Handler) advisorFor(tenantID string) *ai.Advisor {
 	return h.advisor
 }
 
+// draftModule asks the advisor for a first-cut module, grounded in the
+// operator's brief and the engagement's observations. The draft comes back as
+// files and review notes for a person; nothing is written, compiled,
+// registered or run here, and the registry is read only for its names.
+func (h *Handler) draftModule(ctx context.Context, advisor *ai.Advisor, resp *aresv1.AdviseResponse, engID, engName, brief string) (*connect.Response[aresv1.AdviseResponse], error) {
+	p := h.buildProfileInput(engID, engName)
+	in := ai.ModuleDraftInput{Brief: brief, Target: p.Target, Signals: p.Signals, AlreadyRun: p.AlreadyRun}
+	if h.reg != nil {
+		in.ExistingModules = h.reg.Names()
+	}
+	d, out, err := advisor.DraftModule(ctx, in)
+	if err != nil {
+		if errors.Is(err, ai.ErrEmptyBrief) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		resp.Error = err.Error()
+		return connect.NewResponse(resp), nil
+	}
+	resp.Text = out.Text
+	resp.InputTokens = int32(out.Usage.InputTokens)
+	resp.OutputTokens = int32(out.Usage.OutputTokens)
+	if out.Model != "" {
+		resp.Model = out.Model
+	}
+	resp.ModuleDraft = draftToProto(d)
+	return connect.NewResponse(resp), nil
+}
+
+func draftToProto(d ai.ModuleDraft) *aresv1.ModuleDraft {
+	pb := &aresv1.ModuleDraft{
+		Name:        d.Name,
+		SpecJson:    d.SpecJSON,
+		ReviewNotes: d.Notes,
+		Problems:    d.Problems,
+		Refusal:     d.Refusal,
+	}
+	for _, f := range d.Files {
+		pb.Files = append(pb.Files, &aresv1.DraftFile{Path: f.Path, Content: string(f.Content)})
+	}
+	return pb
+}
+
 func validFeature(f string) bool {
 	switch f {
-	case ai.FeatureExplainFinding, ai.FeatureSuggestChecks, ai.FeatureNarratePaths, ai.FeatureDraftReport, ai.FeaturePlanNext:
+	case ai.FeatureExplainFinding, ai.FeatureSuggestChecks, ai.FeatureNarratePaths, ai.FeatureDraftReport, ai.FeaturePlanNext, ai.FeatureDraftModule:
 		return true
 	}
 	return false

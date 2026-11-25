@@ -124,8 +124,8 @@ func TestPlanNextMovesGroundsAndGates(t *testing.T) {
 }
 
 func TestFeaturesAndNotice(t *testing.T) {
-	if len(Features()) != 5 {
-		t.Errorf("want 5 features, got %v", Features())
+	if len(Features()) != 6 {
+		t.Errorf("want 6 features, got %v", Features())
 	}
 	if !contains(Features(), FeaturePlanNext) {
 		t.Errorf("Features() must include plan-next, got %v", Features())

@@ -170,3 +170,53 @@ func TestAdviseUnknownFeature(t *testing.T) {
 		t.Error("an unknown feature must error")
 	}
 }
+
+// draftReply is a valid module spec, as the model would return it.
+func draftReply(t *testing.T) string {
+	t.Helper()
+	return `{"v":1,"name":"acmedraft","title":"Acme status page is public","summary":"confirms the Acme status page is served to anyone by reading its heading once.","severity":"medium","issueKey":"acme-status-exposed","technique":"T1592","surface":"web","cost":{"requests":1,"seconds":2},"probe":{"method":"GET","path":"/acme-status","status":200,"bodyRegex":"<h1>Acme Server Status"},"example":{"status":200,"body":"<h1>Acme Server Status for x</h1>"},"guidance":{"plainSummary":"A page on your server shows who is visiting. Ask your host to make it private.","summary":"Restrict /acme-status to an admin network.","fix":["Allow only 127.0.0.1 to the status page."],"verify":["Request /acme-status from outside and confirm 403."]}}`
+}
+
+func TestAdviseDraftModule(t *testing.T) {
+	h := newTestHandler(t)
+	fp := &fakeProvider{reply: draftReply(t)}
+	h.WithAdvisor(ai.NewAdvisor(fp, 0))
+	id := adviseEngagement(t, h)
+	ctx := context.Background()
+
+	// A brief is required, and checked before anything is sent.
+	_, err := h.Advise(ctx, connect.NewRequest(&aresv1.AdviseRequest{EngagementId: id, Feature: ai.FeatureDraftModule, OptIn: true}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("no brief: err = %v, want invalid_argument", err)
+	}
+	// Without the opt-in nothing is sent.
+	resp, err := h.Advise(ctx, connect.NewRequest(&aresv1.AdviseRequest{EngagementId: id, Feature: ai.FeatureDraftModule, Brief: "CVE-2026-1111 Acme status page"}))
+	if err != nil || !resp.Msg.GetOptInRequired() || fp.calls != 0 {
+		t.Fatalf("no opt-in: resp=%+v err=%v calls=%d", resp.Msg, err, fp.calls)
+	}
+
+	resp, err = h.Advise(ctx, connect.NewRequest(&aresv1.AdviseRequest{
+		EngagementId: id, Feature: ai.FeatureDraftModule, OptIn: true, Brief: "CVE-2026-1111 Acme status page is public",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := resp.Msg.GetModuleDraft()
+	if d == nil || d.GetName() != "acmedraft" || len(d.GetFiles()) == 0 || len(d.GetProblems()) != 0 {
+		t.Fatalf("draft = %+v", d)
+	}
+	if len(d.GetReviewNotes()) == 0 || resp.Msg.GetText() == "" {
+		t.Error("the draft must carry review notes and a text rendering")
+	}
+	// The prompt is grounded in the brief, the engagement and the registry.
+	prompt := fp.last.Messages[0].Content
+	for _, want := range []string{"CVE-2026-1111", "redirectprobe", "T1204.001"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt is not grounded on %q", want)
+		}
+	}
+	// Drafting writes nothing and registers nothing.
+	if _, ok := h.reg.Get("acmedraft"); ok {
+		t.Fatal("a draft was registered")
+	}
+}

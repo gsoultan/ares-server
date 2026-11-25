@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "name": "acmestatus",
+  "title": "Acme server status page is public",
+  "summary": "confirms that the Acme server's status page, which lists every client address and the URL each one is requesting, is served to anyone. It reads the page once and looks for the page's own heading; it sends no payload.",
+  "severity": "medium",
+  "issueKey": "acme-status-exposed",
+  "technique": "T1592",
+  "surface": "web",
+  "needs": ["tech:acme"],
+  "produces": ["finding:acme-status-exposed"],
+  "intendedProof": "answer",
+  "cost": {"requests": 1, "seconds": 2},
+  "probe": {"method": "GET", "path": "/acme-status", "status": 200, "bodyRegex": "<h1>Acme Server Status for [^<]+</h1>"},
+  "example": {"status": 200, "headers": {"Content-Type": "text/html"}, "body": "<html><h1>Acme Server Status for www.example.test</h1><table>...</table></html>"},
+  "negative": {"status": 403, "body": "<h1>Forbidden</h1>"},
+  "trigger": {"when": [{"kind": "tech", "value": "acme"}], "confidence": "medium", "reason": "The site runs the Acme server, whose status page is often left public and lists client addresses and requested URLs."},
+  "guidance": {
+    "plainSummary": "A page on your server shows who is visiting and what they are opening. Ask your host to make it private.",
+    "summary": "Restrict /acme-status to localhost or an admin network, or turn the status module off.",
+    "fix": ["Limit the status page to localhost: allow 127.0.0.1 and deny everyone else in the Acme status block.", "If nobody uses the page, disable the status module and reload the server."],
+    "prevent": ["Keep diagnostic pages off public listeners; serve them on an admin-only port."],
+    "detect": ["Alert on requests to /acme-status from addresses outside the admin network."],
+    "verify": ["Request /acme-status from outside the admin network and confirm it answers 403 or 404."],
+    "references": ["https://owasp.org/www-project-web-security-testing-guide/"]
+  },
+  "origin": {"source": "manual", "ref": "scaffold example", "by": "the Ares team"}
+}
