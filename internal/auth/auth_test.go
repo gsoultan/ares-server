@@ -104,6 +104,11 @@ func TestLoginFlow(t *testing.T) {
 	if got.UserID != u.ID {
 		t.Errorf("authenticated user mismatch")
 	}
+	// The live account's email rides on the session (for audit attribution),
+	// but never on the raw session handed to the client at sign-in.
+	if got.Email != "user@example.com" {
+		t.Errorf("authenticated session email = %q, want the account's", got.Email)
+	}
 	cur, err := svc.CurrentUser(sess.Token)
 	if err != nil || cur.ID != u.ID {
 		t.Errorf("CurrentUser = %v, %v", cur.ID, err)

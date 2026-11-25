@@ -90,6 +90,7 @@ function stepsOf(data: JsonObject | undefined): RampStep[] {
       p50Ms: num(o["p50Ms"]),
       p95Ms: num(o["p95Ms"]),
       rate429: num(o["rate429"]),
+      partial: o["partial"] === true,
     };
   });
 }
@@ -355,7 +356,9 @@ function ResilienceRun({
   const running = !o || o.status !== "done";
   const forJob = activity.filter((e) => e.target === jobId || e.detail.includes(jobId));
   const used = forJob.find((e) => e.action === "approval-used");
-  const stoppedByHand = forJob.find((e) => e.action === "job-stopped");
+  // Who stopped it and when, for the note only. Whether the run was stopped
+  // comes from the engine's result, not from the activity log.
+  const stopEntry = forJob.find((e) => e.action === "job-stopped");
   // Start and finish entries do not name the job; the approval it spent does.
   const started = used;
   const elapsed = useElapsed(started?.time, running);
@@ -427,22 +430,32 @@ function ResilienceRun({
   }
 
   // Finished.
-  const held = result?.kind === "info";
+  // A run stopped by hand reports its own result: the load it actually reached
+  // (maxTested), the ceiling it was allowed to go to, and the step the stop cut
+  // short marked partial. It is info, but it did not hold the ceiling.
+  const stopped = data?.["stopped"] === true;
+  const held = result?.kind === "info" && !stopped;
   const knee = num(data?.["kneeConcurrency"]);
-  // A step cut short by a stop is not a measurement.
-  const measured = stoppedByHand ? steps.slice(0, -1) : steps;
+  const ceiling = num(data?.["ceiling"]);
+  // A step cut short by a stop is not a measurement and is never scored.
+  const measured = steps.filter((s) => !s.partial);
   const healthy = measured.filter((s) => (knee ? s.concurrency < knee : true));
   const lastHealthy = healthy[healthy.length - 1];
-  const peak = steps.reduce((m, s) => Math.max(m, s.p95Ms), 0);
-  const reached = steps[steps.length - 1]?.concurrency ?? 0;
+  const peak = measured.reduce((m, s) => Math.max(m, s.p95Ms), 0);
+  const reached = stopped ? num(data?.["maxTested"]) : (steps[steps.length - 1]?.concurrency ?? 0);
   const limitMs = 2000;
-  const title = stoppedByHand
+  const title = stopped
     ? "Resilience test stopped by hand"
     : held
       ? "Held the tested ceiling"
       : result
         ? "Slows down under load before the ceiling"
         : "The resilience test found nothing to measure";
+  const stoppedBy = stopEntry ? `Stopped by ${stopEntry.actor} at ${formatDateTime(stopEntry.time)}` : "Stopped by hand";
+  const stoppedNote =
+    reached > 0
+      ? `${stoppedBy}, after reaching ${reached} requests at a time${ceiling ? `, short of the agreed ceiling of ${ceiling}` : ""}. The ceiling was not tested.`
+      : `${stoppedBy}, before any requests were sent.`;
 
   return (
     <Stack gap="lg">
@@ -450,9 +463,11 @@ function ResilienceRun({
         back={backTo(engagement)}
         title={title}
         badge={
-          held && !stoppedByHand ? (
+          stopped ? (
+            <ToneBadge tone="neutral" size="lg">Stopped</ToneBadge>
+          ) : held ? (
             <ToneBadge tone="good" size="lg">Healthy</ToneBadge>
-          ) : result && !held ? (
+          ) : result ? (
             <ToneBadge tone="warn" size="lg">Medium</ToneBadge>
           ) : (
             <ToneBadge tone="neutral" size="lg">Done</ToneBadge>
@@ -469,8 +484,8 @@ function ResilienceRun({
         }
       />
       <InfoNote tone="warn" title="Result of an approved resilience test">
-        {stoppedByHand
-          ? `Stopped by ${stoppedByHand.actor} at ${formatDateTime(stoppedByHand.time)}, after reaching ${reached} requests at a time. The numbers below cover the steps that ran.`
+        {stopped
+          ? stoppedNote
           : held
             ? "Ares raised the load in steps up to the agreed ceiling and stopped there. The system stayed inside your limits and was never held down."
             : `Ares raised the load in steps and stopped on its own at ${knee} requests at a time, when the system crossed a limit you set. Your system was never held down.`}
@@ -496,17 +511,22 @@ function ResilienceRun({
 
       {steps.length > 0 && (
         <>
-          <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
+          <SimpleGrid cols={stopped ? { base: 1, sm: 2, md: 3, lg: 5 } : { base: 1, sm: 2, md: 4 }} spacing="md">
             <StatCard label="Healthy up to" value={lastHealthy ? lastHealthy.concurrency : "–"}>
               <Text size="xs" c="dimmed">requests at a time</Text>
             </StatCard>
             <StatCard
-              label={stoppedByHand ? "Reached when stopped" : held ? "Ceiling reached" : "Stopped at"}
-              value={held || stoppedByHand ? reached : knee || reached}
-              tone={stoppedByHand ? "neutral" : held ? "good" : "warn"}
+              label={stopped ? "Reached when stopped" : held ? "Ceiling reached" : "Stopped at"}
+              value={held || stopped ? reached : knee || reached}
+              tone={stopped ? "neutral" : held ? "good" : "warn"}
             >
               <Text size="xs" c="dimmed">requests at a time</Text>
             </StatCard>
+            {stopped && (
+              <StatCard label="Agreed ceiling" value={ceiling || "–"} tone="neutral">
+                <Text size="xs" c="dimmed">not reached, so not tested</Text>
+              </StatCard>
+            )}
             <StatCard label="Slowest response" value={`${peak.toLocaleString()} ms`}>
               <Text size="xs" c="dimmed">slowest 5%, worst step</Text>
             </StatCard>
@@ -515,7 +535,7 @@ function ResilienceRun({
             </StatCard>
           </SimpleGrid>
           <Section title="Load and response, step by step" description="Each step ran at a fixed number of requests at a time.">
-            <ResilienceChart steps={steps} limitMs={peakLimit(data) ?? limitMs} ceiling={Math.max(reached, knee)} />
+            <ResilienceChart steps={measured} limitMs={peakLimit(data) ?? limitMs} ceiling={Math.max(reached, knee)} />
             <Table.ScrollContainer minWidth={560}>
               <Table verticalSpacing="xs" striped>
                 <Table.Thead>
@@ -530,8 +550,19 @@ function ResilienceRun({
                 </Table.Thead>
                 <Table.Tbody>
                   {steps.map((s) => (
-                    <Table.Tr key={s.concurrency} fw={knee && s.concurrency === knee ? 650 : undefined}>
-                      <Table.Td>{s.concurrency}</Table.Td>
+                    <Table.Tr
+                      key={s.concurrency}
+                      fw={knee && s.concurrency === knee ? 650 : undefined}
+                      c={s.partial ? "dimmed" : undefined}
+                    >
+                      <Table.Td>
+                        <Group gap={6} wrap="nowrap">
+                          {s.concurrency}
+                          {s.partial && (
+                            <ToneBadge tone="neutral" size="sm">Cut short</ToneBadge>
+                          )}
+                        </Group>
+                      </Table.Td>
                       <Table.Td>{s.requests}</Table.Td>
                       <Table.Td>{(s.errorRate * 100).toFixed(1)}%</Table.Td>
                       <Table.Td>{s.p50Ms} ms</Table.Td>
@@ -549,13 +580,16 @@ function ResilienceRun({
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg" style={{ alignItems: "start" }}>
         <Section title="What it means">
           <Text>
-            {stoppedByHand
-              ? `The test was stopped by hand before it reached its ceiling, so it does not say where this system's capacity ends. Up to ${reached} requests at a time it stayed inside your limits; the last step was cut short when it stopped. Run it again to measure the full ramp.`
-              : typeof data?.["description"] === "string"
-                ? data["description"]
-                : "No result was reported for this target."}
+            {typeof data?.["description"] === "string"
+              ? data["description"]
+              : "No result was reported for this target."}
           </Text>
-          {!stoppedByHand && typeof data?.["remediation"] === "string" && (
+          {stopped && (
+            <Text size="sm" c="dimmed" mt="xs">
+              Run it again to measure the full ramp.
+            </Text>
+          )}
+          {!stopped && typeof data?.["remediation"] === "string" && (
             <Field label="How to fix it">{data["remediation"]}</Field>
           )}
         </Section>

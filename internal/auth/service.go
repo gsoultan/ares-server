@@ -207,6 +207,7 @@ func (s *Service) Authenticate(token string) (Session, error) {
 		_ = s.sessions.Delete(h)
 		return Session{}, ErrNotAuthenticated
 	}
+	sess.Email = u.Email
 	return sess, nil
 }
 
