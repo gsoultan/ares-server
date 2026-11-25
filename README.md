@@ -235,6 +235,21 @@ one, or omit it for the default workspace.
 | `GET /api/engagements/{id}/audit` | the hash-chained audit trail and its validity |
 | `GET /api/engagements/{id}/report?format=pdf\|docx\|md` | download a client-ready report |
 
+## AI module drafting
+
+The optional AI advisor's `draft-module` feature (`Advise` with `feature:
+"draft-module"` and a `brief`) drafts a first-cut detection module from a CVE
+description, grounded in what the engagement has observed. The model returns a
+declarative spec, never code; the server validates it and renders it with the
+ares module scaffold (`module/scaffold`, see ares `docs/module-sdk.md`), and
+returns the files, the spec and review notes in `module_draft`. The scaffold
+renders only level-1, read-only checks (one GET/HEAD or a banner read), so a
+draft cannot ask for a write, a payload or a higher consent level, and nothing
+the model writes can become code. The server never writes the draft to a
+repository, compiles, registers or runs it: a person reviews and finishes it
+and opens the pull request in ares. It needs the same per-engagement opt-in as
+every advisory feature.
+
 ## Reports
 
 Any engagement can be exported as a client-ready report in **PDF**, **DOCX** or

@@ -97,8 +97,8 @@ func TestSuggestChecksRemindsAboutScope(t *testing.T) {
 }
 
 func TestFeaturesAndNotice(t *testing.T) {
-	if len(Features()) != 4 {
-		t.Errorf("want 4 features, got %v", Features())
+	if len(Features()) != 5 {
+		t.Errorf("want 5 features, got %v", Features())
 	}
 	for _, want := range []string{"never runs a test", "scope", "authoriz"} {
 		if !strings.Contains(strings.ToLower(Notice), strings.ToLower(want)) {

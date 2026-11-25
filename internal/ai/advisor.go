@@ -71,7 +71,7 @@ const (
 
 // Features lists the advisory features this layer offers.
 func Features() []string {
-	return []string{FeatureExplainFinding, FeatureSuggestChecks, FeatureNarratePaths, FeatureDraftReport}
+	return []string{FeatureExplainFinding, FeatureSuggestChecks, FeatureNarratePaths, FeatureDraftReport, FeatureDraftModule}
 }
 
 // ---- Input types (plain data; the API handler maps Ares types into these) ----
@@ -219,6 +219,13 @@ func (a *Advisor) Advise(ctx context.Context, feature string, payload json.RawMe
 			return Response{}, err
 		}
 		return a.DraftReportNarrative(ctx, r)
+	case FeatureDraftModule:
+		var in ModuleDraftInput
+		if err := unmarshalPayload(payload, &in); err != nil {
+			return Response{}, err
+		}
+		_, resp, err := a.DraftModule(ctx, in)
+		return resp, err
 	default:
 		return Response{}, fmt.Errorf("ai: unknown advisory feature %q (want %s)", feature, strings.Join(Features(), ", "))
 	}
