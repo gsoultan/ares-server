@@ -28,6 +28,16 @@ type Job struct {
 	Actor        string          `json:"actor"`
 	Targets      []module.Target `json:"targets"`
 	Params       json.RawMessage `json:"params,omitempty"`
+	// Recheck is set when the job reproduces a finding's proof on demand. The
+	// worker uses it to record whether the same claim came back.
+	Recheck *Recheck `json:"recheck,omitempty"`
+}
+
+// Recheck names the finding a re-check job reproduces and the claim its proof
+// must carry again for the finding to count as reproduced.
+type Recheck struct {
+	FindingID string `json:"findingId"`
+	Claim     string `json:"claim"`
 }
 
 // Queue is a buffered, concurrency-safe job channel.

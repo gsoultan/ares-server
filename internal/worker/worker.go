@@ -52,6 +52,20 @@ type Outcome struct {
 	// modules that report one (see module.Tracker); nil otherwise. It is kept
 	// on the final outcome too, so a finished job shows its last step count.
 	Progress *module.Progress `json:"progress,omitempty"`
+	// Recheck is the result of a reproduce-on-demand run of a finding's proof:
+	// set only when the job was a re-check that actually ran against its
+	// target. It lives on the outcome, so it is stored, sealed and scoped to the
+	// workspace exactly like the job's results.
+	Recheck *RecheckResult `json:"recheck,omitempty"`
+}
+
+// RecheckResult records one re-check of a finding: whether the new run emitted
+// a proof with the same claim, and that proof's fingerprint.
+type RecheckResult struct {
+	FindingID   string `json:"findingId"`
+	Claim       string `json:"claim"`
+	Reproduced  bool   `json:"reproduced"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 // Running reports whether this outcome is an in-flight snapshot (the job has not
@@ -298,9 +312,34 @@ func (p *Processor) ProcessWithProgress(ctx context.Context, job queue.Job, prog
 		eng.Audit.Append(job.Actor, "result", r.Target.String(),
 			fmt.Sprintf("%s/%s", r.Capability, r.Kind))
 	}
+	// A re-check that ran against its target records whether the same claim
+	// came back. A run that errored or had every target refused proves nothing
+	// either way, so it leaves no entry; the job itself still reports why.
+	if job.Recheck != nil && err == nil && len(allowed) > 0 {
+		out.Recheck = recheckResult(job.Recheck, out.Results)
+		eng.Audit.Append(job.Actor, "proof-rechecked", job.Recheck.FindingID,
+			fmt.Sprintf("job=%s reproduced=%t fingerprint=%s", job.ID, out.Recheck.Reproduced, out.Recheck.Fingerprint))
+	}
 	eng.Audit.Append(job.Actor, "job-finished", job.Module,
 		fmt.Sprintf("%d results", len(out.Results)))
 	return finish()
+}
+
+// recheckResult decides whether a re-check reproduced its finding: the new run
+// must emit a finding whose proof carries the same claim.
+func recheckResult(rc *queue.Recheck, results []module.Result) *RecheckResult {
+	res := &RecheckResult{FindingID: rc.FindingID, Claim: rc.Claim}
+	if rc.Claim == "" {
+		return res
+	}
+	for _, r := range results {
+		if r.Kind == "finding" && r.Proof != nil && r.Proof.Claim == rc.Claim {
+			res.Reproduced = true
+			res.Fingerprint = r.Proof.Fingerprint
+			return res
+		}
+	}
+	return res
 }
 
 // Pool consumes jobs from a queue with a fixed number of workers and saves each

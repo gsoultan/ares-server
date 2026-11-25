@@ -383,9 +383,32 @@ func (h *Handler) collectFindings(engIDs []string, engName map[string]string) []
 		}
 	}
 
+	// Every finished re-check of a finding's proof, from the re-check jobs'
+	// own outcomes. Only outcomes of the caller's engagements are read, and a
+	// re-check attaches only to a finding of the engagement it ran in, so the
+	// history never crosses workspaces.
+	for _, o := range outcomes {
+		rc := o.Recheck
+		if rc == nil || o.Running() {
+			continue
+		}
+		a, ok := byID[rc.FindingID]
+		if !ok || a.f.GetEngagementId() != o.Engagement {
+			continue
+		}
+		a.f.Rechecks = append(a.f.Rechecks, &aresv1.ProofCheck{
+			At:          rfc(o.FinishedAt),
+			Reproduced:  rc.Reproduced,
+			Fingerprint: rc.Fingerprint,
+			JobId:       o.JobID,
+		})
+	}
+
 	out := make([]*aresv1.Finding, 0, len(order))
 	for _, id := range order {
 		a := byID[id]
+		// Newest re-check first, as the proto documents.
+		sort.SliceStable(a.f.Rechecks, func(i, j int) bool { return a.f.Rechecks[i].GetAt() > a.f.Rechecks[j].GetAt() })
 		if lr, ok := latestRun[a.module+"\x00"+a.target]; ok && lr.After(a.lastSeen) {
 			a.f.StillPresent = false
 		} else {
