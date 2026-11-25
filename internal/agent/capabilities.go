@@ -23,6 +23,7 @@ const (
 	CapHostPosture  = "hostposture"  // local read-only posture (phase 2+)
 	CapPassiveSniff = "passivesniff" // passive exposure listening (phase 3)
 	CapMITMExposure = "mitmexposure" // MITM susceptibility, observation-only (phase 3)
+	CapEgressCheck  = "egresscheck"  // one benign request per channel to Ares's own canary (M-25)
 )
 
 // moduleGroup maps an engine module name to its capability group. Only modules
@@ -43,12 +44,19 @@ var moduleGroup = map[string]string{
 	// passive internal-exposure assessment (observation-only, inert)
 	"passivesniff": CapPassiveSniff,
 	"mitmexposure": CapMITMExposure,
+	// local read-only Linux host posture (the v6 Linux CVE wave). sshbanner is
+	// a pre-auth banner read and belongs with the host's own posture; nftreach
+	// is the consented level-3 nf_tables reachability probe, gated by a
+	// recorded approval in the module itself.
+	"hostposture": CapHostPosture,
+	"sshbanner":   CapHostPosture,
+	"nftreach":    CapHostPosture,
 }
 
 // AllCapabilities lists every capability group, for the operator UI. mitmexposure
 // is included but is off unless an operator adds it explicitly.
 func AllCapabilities() []string {
-	return []string{CapDiscovery, CapWebCheck, CapHostPosture, CapPassiveSniff, CapMITMExposure}
+	return []string{CapDiscovery, CapWebCheck, CapHostPosture, CapPassiveSniff, CapMITMExposure, CapEgressCheck}
 }
 
 // GroupOf returns the capability group a module belongs to, or "" if the module
