@@ -25,6 +25,10 @@ import (
 // keep the request within sensible token limits.
 const maxReportFindings = 40
 
+// maxNextMoveFindings bounds how many findings of each kind (proven, observed) a
+// plan-next prompt carries, so the request stays within sensible token limits.
+const maxNextMoveFindings = 20
+
 // Advise returns grounded AI advisory text. It is strictly advisory: it never
 // dispatches a job, changes scope, or bypasses the authorization gate — it only
 // turns the engagement's own data into an explanation or suggestion. When no
@@ -47,7 +51,7 @@ func (h *Handler) Advise(ctx context.Context, req *connect.Request[aresv1.Advise
 
 	if !validFeature(feature) {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("feature must be one of: explain-finding, suggest-checks, narrate-paths, draft-report"))
+			errors.New("feature must be one of: explain-finding, suggest-checks, narrate-paths, draft-report, plan-next"))
 	}
 
 	// The engagement is always resolved (tenant-checked) so the data is grounded
@@ -103,7 +107,7 @@ func (h *Handler) advisorFor(tenantID string) *ai.Advisor {
 
 func validFeature(f string) bool {
 	switch f {
-	case ai.FeatureExplainFinding, ai.FeatureSuggestChecks, ai.FeatureNarratePaths, ai.FeatureDraftReport:
+	case ai.FeatureExplainFinding, ai.FeatureSuggestChecks, ai.FeatureNarratePaths, ai.FeatureDraftReport, ai.FeaturePlanNext:
 		return true
 	}
 	return false
@@ -136,8 +140,58 @@ func (h *Handler) buildAdvicePayload(feature, engID, engName string, nameMap map
 		findings := h.collectFindings([]string{engID}, nameMap)
 		risk := report.RiskOf(h.outcomes.ByEngagement(engID))
 		return json.Marshal(buildReportInput(engName, findings, risk))
+
+	case ai.FeaturePlanNext:
+		return json.Marshal(h.buildNextMoveInput(engID, engName, nameMap))
 	}
 	return nil, errors.New("unknown feature")
+}
+
+// buildNextMoveInput assembles the adversary-next-move input: the engagement's
+// findings split into proven and observed (most severe first, each capped), its
+// correlated attack paths, and what has already run — so the advisor can ground
+// the highest-priority moves in reproducible proof.
+func (h *Handler) buildNextMoveInput(engID, engName string, nameMap map[string]string) ai.NextMoveInput {
+	findings := h.collectFindings([]string{engID}, nameMap)
+	risk := report.RiskOf(h.outcomes.ByEngagement(engID))
+	in := ai.NextMoveInput{Engagement: engName, Target: risk.Target, Score: risk.Score, Rating: risk.Rating}
+
+	sorted := append([]*aresv1.Finding(nil), findings...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return severityRank(sorted[i]) > severityRank(sorted[j])
+	})
+	for _, f := range sorted {
+		fi := findingToInput(f)
+		if isProven(f) {
+			if len(in.Proven) < maxNextMoveFindings {
+				in.Proven = append(in.Proven, fi)
+			}
+		} else if len(in.Observed) < maxNextMoveFindings {
+			in.Observed = append(in.Observed, fi)
+		}
+	}
+
+	in.Paths = riskToInput(risk).Paths
+	prof := h.buildProfileInput(engID, engName)
+	in.RanModules = prof.AlreadyRun
+	in.Techniques = prof.Signals
+	return in
+}
+
+// isProven reports whether a finding carries reproducible proof — a callback,
+// differential, computed or answer proof — rather than a version match or a
+// detection-only observation. The highest-priority next moves are grounded in
+// these, mirroring the engine's honest proof labels.
+func isProven(f *aresv1.Finding) bool {
+	p := f.GetProof()
+	if p == nil {
+		return false
+	}
+	switch p.GetKind() {
+	case "callback", "differential", "computed", "answer":
+		return true
+	}
+	return false
 }
 
 // findingToInput flattens a proto Finding into the advisor's input shape.
