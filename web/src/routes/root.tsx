@@ -1,14 +1,15 @@
 import { useEffect, type ReactNode } from "react";
 import {
-  ActionIcon,
   AppShell,
+  Avatar,
   Box,
   Burger,
   Group,
+  Menu,
   NavLink,
   Stack,
   Text,
-  Tooltip,
+  UnstyledButton,
   useComputedColorScheme,
   useMantineColorScheme,
 } from "@mantine/core";
@@ -16,6 +17,7 @@ import { useDisclosure } from "@mantine/hooks";
 import {
   IconAlertTriangle,
   IconBriefcase,
+  IconDotsVertical,
   IconFileSearch,
   IconFileText,
   IconHistory,
@@ -73,6 +75,29 @@ function Item({ label, icon, active, sub }: { label: string; icon?: ReactNode; a
   );
 }
 
+// A quiet heading above a group of menu items.
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <Text
+      size="xs"
+      fw={650}
+      c="dimmed"
+      px="sm"
+      mb={4}
+      style={{ letterSpacing: "0.03em", textTransform: "uppercase" }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+// Up to two initials for the profile avatar, from a name or email.
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (parts[0]?.slice(0, 2) ?? "?").toUpperCase();
+}
+
 function Shell() {
   const [opened, { toggle, close }] = useDisclosure(false);
   const { setColorScheme } = useMantineColorScheme();
@@ -80,6 +105,7 @@ function Shell() {
   const next = scheme === "dark" ? "light" : "dark";
   const { tenantId } = useTenant();
   const { user, signOut } = useSession();
+  const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   // When an engagement is open, its sections join the menu under its name.
@@ -127,7 +153,9 @@ function Shell() {
             </Box>
           )}
 
-          <Stack component="nav" aria-label="Main" gap={2}>
+          {/* Your work: where testing is set up and run. */}
+          <Stack component="nav" aria-label="Your work" gap={2}>
+            <SectionLabel>Your work</SectionLabel>
             <Link to="/" onClick={close} style={plain}>
               <Item label="Overview" icon={<IconHome size={18} />} active={path === "/"} />
             </Link>
@@ -158,7 +186,11 @@ function Shell() {
                 ))}
               </Box>
             )}
+          </Stack>
 
+          {/* Security results: what the testing turned up, across every engagement. */}
+          <Stack component="nav" aria-label="Security results" gap={2}>
+            <SectionLabel>Security results</SectionLabel>
             <Link to="/findings" search={carry} onClick={close} style={plain}>
               <Item
                 label="Findings"
@@ -188,51 +220,87 @@ function Shell() {
             </Link>
           </Stack>
 
-          <Box mt="auto">
-            {(RANK_MANAGER as readonly string[]).includes(user?.role ?? "") && (
-              <Link to="/people" onClick={close} style={plain}>
-                <Item label="People" icon={<IconUsers size={18} />} active={path === "/people"} />
-              </Link>
-            )}
-            <Link to="/settings" onClick={close} style={plain}>
-              <Item label="Settings" icon={<IconSettings size={18} />} active={path === "/settings"} />
-            </Link>
-            <Link to="/about" onClick={close} style={plain}>
-              <Item label="About" icon={<IconInfoCircle size={18} />} active={path === "/about"} />
-            </Link>
-            <Text size="xs" c="dimmed" px="sm" mt="xs">
-              © 2026 Gembit Soultan Shirazi
-            </Text>
-          </Box>
-          <Group px={4} wrap="nowrap" gap="sm">
-            {user && (
-              <Box style={{ flex: 1, minWidth: 0 }}>
-                <Text size="sm" fw={600} truncate>
-                  {user.name || user.email}
-                </Text>
-                <Text size="xs" c="dimmed" truncate>
-                  {roleName(user.role)}
-                </Text>
-              </Box>
-            )}
-            {user && (
-              <Tooltip label="Sign out">
-                <ActionIcon variant="default" size="lg" aria-label="Sign out" onClick={signOut}>
-                  <IconLogout size={18} />
-                </ActionIcon>
-              </Tooltip>
-            )}
-            <Tooltip label={`Switch to ${next} mode`}>
-              <ActionIcon
-                variant="default"
-                size="lg"
-                aria-label={`Switch to ${next} mode`}
-                onClick={() => setColorScheme(next)}
-              >
-                {scheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
-              </ActionIcon>
-            </Tooltip>
-          </Group>
+          {/* The account menu: everything that is not day-to-day testing lives
+              behind one profile row, so the menu above stays short. */}
+          {user && (
+            <Box mt="auto">
+              <Menu position="top-start" width={232} withinPortal shadow="md">
+                <Menu.Target>
+                  <UnstyledButton
+                    aria-label="Account menu"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      width: "100%",
+                      padding: 8,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Avatar radius="xl" size={32} color="brand">
+                      {initials(user.name || user.email)}
+                    </Avatar>
+                    <Box style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                      <Text size="sm" fw={600} truncate>
+                        {user.name || user.email}
+                      </Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {roleName(user.role)}
+                      </Text>
+                    </Box>
+                    <Box c="dimmed" style={{ display: "flex" }}>
+                      <IconDotsVertical size={18} />
+                    </Box>
+                  </UnstyledButton>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {(RANK_MANAGER as readonly string[]).includes(user.role) && (
+                    <Menu.Item
+                      leftSection={<IconUsers size={16} />}
+                      onClick={() => {
+                        close();
+                        void navigate({ to: "/people" });
+                      }}
+                    >
+                      People
+                    </Menu.Item>
+                  )}
+                  <Menu.Item
+                    leftSection={<IconSettings size={16} />}
+                    onClick={() => {
+                      close();
+                      void navigate({ to: "/settings" });
+                    }}
+                  >
+                    Settings
+                  </Menu.Item>
+                  <Menu.Item
+                    leftSection={<IconInfoCircle size={16} />}
+                    onClick={() => {
+                      close();
+                      void navigate({ to: "/about" });
+                    }}
+                  >
+                    About
+                  </Menu.Item>
+                  <Menu.Item
+                    closeMenuOnClick={false}
+                    leftSection={scheme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
+                    onClick={() => setColorScheme(next)}
+                  >
+                    {`Switch to ${next} mode`}
+                  </Menu.Item>
+                  <Menu.Divider />
+                  <Menu.Item color="red" leftSection={<IconLogout size={16} />} onClick={signOut}>
+                    Sign out
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+              <Text size="xs" c="dimmed" px="sm" mt={6}>
+                © 2026 Gembit Soultan Shirazi
+              </Text>
+            </Box>
+          )}
         </Stack>
       </AppShell.Navbar>
 
