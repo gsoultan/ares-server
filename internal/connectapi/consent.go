@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/gsoultan/ares-server/internal/auth"
 	"github.com/gsoultan/ares-server/internal/engagement"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares-server/internal/technique"
@@ -118,10 +119,7 @@ func (h *Handler) SetTestIntensity(ctx context.Context, req *connect.Request[are
 	if ok, reason := eng.CanRun(); !ok {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(reason))
 	}
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	if err := eng.SetTestLevel(module.ConsentLevel(req.Msg.GetLevel()), actor); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -164,15 +162,12 @@ func (h *Handler) ApproveTechnique(ctx context.Context, req *connect.Request[are
 }
 
 // DeclineTechnique records that an intrusive test was not allowed.
-func (h *Handler) DeclineTechnique(_ context.Context, req *connect.Request[aresv1.DeclineTechniqueRequest]) (*connect.Response[aresv1.DeclineTechniqueResponse], error) {
+func (h *Handler) DeclineTechnique(ctx context.Context, req *connect.Request[aresv1.DeclineTechniqueRequest]) (*connect.Response[aresv1.DeclineTechniqueResponse], error) {
 	eng, err := h.engagementInTenant(req.Msg.GetTenantId(), req.Msg.GetEngagementId())
 	if err != nil {
 		return nil, err
 	}
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	eng.Decline(req.Msg.GetModule(), targetDomain(req.Msg.GetTarget()), actor, req.Msg.GetNote())
 	if err := h.store.Save(eng); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -189,10 +184,7 @@ func (h *Handler) WithdrawApproval(ctx context.Context, req *connect.Request[are
 	if err != nil {
 		return nil, err
 	}
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	if err := eng.Withdraw(req.Msg.GetApprovalId(), actor); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -204,7 +196,7 @@ func (h *Handler) WithdrawApproval(ctx context.Context, req *connect.Request[are
 
 // StopJob stops one running test without stopping the engagement. A job from
 // another workspace is reported as not running, so ids leak nothing.
-func (h *Handler) StopJob(_ context.Context, req *connect.Request[aresv1.StopJobRequest]) (*connect.Response[aresv1.StopJobResponse], error) {
+func (h *Handler) StopJob(ctx context.Context, req *connect.Request[aresv1.StopJobRequest]) (*connect.Response[aresv1.StopJobResponse], error) {
 	if h.jobs == nil {
 		return nil, connect.NewError(connect.CodeUnavailable, errors.New("stopping a single test is not available"))
 	}
@@ -224,10 +216,7 @@ func (h *Handler) StopJob(_ context.Context, req *connect.Request[aresv1.StopJob
 	}
 	stopped := h.jobs.Stop(jobID)
 	if stopped {
-		actor := req.Msg.GetActor()
-		if actor == "" {
-			actor = "operator"
-		}
+		actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 		eng.Audit.Append(actor, "job-stopped", jobID, "stopped by hand")
 		_ = h.store.Save(eng)
 	}

@@ -16,6 +16,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/gsoultan/ares-server/internal/auth"
 	aresv1 "github.com/gsoultan/ares-server/internal/gen/ares/v1"
 	"github.com/gsoultan/ares-server/internal/queue"
 	"github.com/gsoultan/ares-server/internal/uuid"
@@ -148,7 +149,7 @@ func (h *Handler) findingProofs(engIDs []string) map[string]*module.Proof {
 // RecheckFinding reproduces a finding's proof on demand by dispatching its
 // narrowed re-check probe through the normal scope gate. It never bypasses
 // authorization: the engagement must still be runnable.
-func (h *Handler) RecheckFinding(_ context.Context, req *connect.Request[aresv1.RecheckFindingRequest]) (*connect.Response[aresv1.RecheckFindingResponse], error) {
+func (h *Handler) RecheckFinding(ctx context.Context, req *connect.Request[aresv1.RecheckFindingRequest]) (*connect.Response[aresv1.RecheckFindingResponse], error) {
 	engIDs, _, err := h.workspaceEngagements(req.Msg.GetTenantId(), "")
 	if err != nil {
 		return nil, err
@@ -179,19 +180,21 @@ func (h *Handler) RecheckFinding(_ context.Context, req *connect.Request[aresv1.
 	if _, known := h.reg.Get(rc.Module); !known {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("re-check module is not available"))
 	}
-	actor := req.Msg.GetActor()
-	if actor == "" {
-		actor = "operator"
-	}
+	actor := auth.Actor(ctx, req.Msg.GetActor(), "operator")
 	jobID := uuid.NewV7()
-	h.queue.Enqueue(queue.Job{
+	// TryEnqueue, as DispatchJob does: a full queue answers "try again" at once
+	// instead of parking the request (and its connection) until a worker frees
+	// a slot.
+	if err := h.queue.TryEnqueue(queue.Job{
 		ID:           jobID,
 		EngagementID: eng.ID,
 		Module:       rc.Module,
 		Actor:        actor,
 		Targets:      []module.Target{rc.Target},
 		Params:       rc.Params,
-	})
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeResourceExhausted, errors.New("job queue is full, try again shortly"))
+	}
 	h.pending.add(jobID, eng.ID, rc.Module)
 	eng.Audit.Append(actor, "proof-recheck", req.Msg.GetFindingId(),
 		"module="+rc.Module+" claim="+proof.Claim)

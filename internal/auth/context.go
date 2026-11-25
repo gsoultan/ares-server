@@ -36,3 +36,24 @@ func (r Role) IsManager() bool {
 	}
 	return false
 }
+
+// Actor names who performed an action, for the audit trail. When the request
+// carries a signed-in session, the account is the authority: the actor is its
+// email (or, failing that, its user id) and any name the client claimed is
+// ignored, so one operator cannot write an audit entry in another's name.
+// Without a session (auth off, or before first-run setup) the client's claimed
+// name is used, and fallback when it is empty.
+func Actor(ctx context.Context, claimed, fallback string) string {
+	if s, ok := SessionFrom(ctx); ok {
+		if s.Email != "" {
+			return s.Email
+		}
+		if s.UserID != "" {
+			return "user:" + s.UserID
+		}
+	}
+	if claimed != "" {
+		return claimed
+	}
+	return fallback
+}

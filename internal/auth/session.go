@@ -30,6 +30,10 @@ type Session struct {
 	Role      Role      `json:"role"`
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
+	// Email is the account's sign-in address, filled from the live account on
+	// every Authenticate so the audit trail can name who acted. It is never
+	// stored with the session (the account is the source of truth).
+	Email string `json:"-"`
 }
 
 // Expired reports whether the session is past its expiry.

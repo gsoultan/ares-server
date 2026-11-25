@@ -253,7 +253,7 @@ func (s *Server) setScope(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	eng.Audit.Append("api", "scope-updated", eng.ID,
+	eng.Audit.Append(auth.Actor(r.Context(), "", "api"), "scope-updated", eng.ID,
 		fmt.Sprintf("%d in scope, %d excluded", len(body.InScope), len(body.Exclude)))
 	if err := s.store.Save(eng); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -280,6 +280,12 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// approvedBy names the client's signatory; record separately which
+	// signed-in account attached the permission, so the trail shows both.
+	if sess, ok := auth.SessionFrom(r.Context()); ok {
+		eng.Audit.Append(auth.Actor(r.Context(), "", "operator"), "authorization-recorded", eng.ID,
+			"permission attached by "+string(sess.Role))
+	}
 	if err := s.store.Save(eng); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -297,9 +303,7 @@ func (s *Server) halt(w http.ResponseWriter, r *http.Request) {
 		Actor string `json:"actor"`
 	}
 	_ = readJSON(r, &body)
-	if body.Actor == "" {
-		body.Actor = "operator"
-	}
+	body.Actor = auth.Actor(r.Context(), body.Actor, "operator")
 	eng.Halt(body.Actor)
 	if err := s.store.Save(eng); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -333,9 +337,7 @@ func (s *Server) dispatchJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("unknown module %q", body.Module))
 		return
 	}
-	if body.Actor == "" {
-		body.Actor = "operator"
-	}
+	body.Actor = auth.Actor(r.Context(), body.Actor, "operator")
 	// The consent gate, as on the control plane. This REST surface takes no
 	// approvals, so an intrusive test is refused here; the worker re-checks.
 	if level := technique.LevelOf(s.reg, body.Module); level > module.LevelSafeProof {
@@ -421,9 +423,7 @@ func (s *Server) setDetection(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if body.Actor == "" {
-		body.Actor = "operator"
-	}
+	body.Actor = auth.Actor(r.Context(), body.Actor, "operator")
 	if err := eng.SetDetection(body.Technique, detection.Outcome(body.Outcome), body.Note, body.Actor); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
